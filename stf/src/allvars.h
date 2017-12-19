@@ -635,7 +635,7 @@ struct Options
         iusetracerparticles=0;
 #ifdef HIGHRES
         iuseextradarkparticles=1;
-#else 
+#else
         iuseextradarkparticles=0;
 #endif
 
@@ -1054,6 +1054,14 @@ struct PropData
     Double_t RV_Krot;
     //@}
 
+    ///\name profiles of mass, velocity, angular momentum
+    //@{
+    vector<Double_t> massprofile;
+    vector<Coordinate> velprofile;
+    vector<Matrix> sigmaprofile;
+    vector<Coordinate> Jprofile;
+    //@}
+
 #ifdef GASON
     ///\name gas specific quantities
     //@{
@@ -1072,9 +1080,17 @@ struct PropData
     Matrix eigvec_gas;
     ///mean temperature,metallicty,star formation rate
     Double_t Temp_gas,Z_gas,SFR_gas;
+    ///variation in temperature,metallicty,star formation rate
+    Double_t Temp_gas_sigma,Z_gas_sigma,SFR_gas_sigma;
     ///physical properties for dynamical state
     Double_t Efrac_gas,Pot_gas,T_gas;
+    ///profiles
+    vector<Double_t> massprofile_gas;
+    vector<Coordinate> velprofile_gas;
+    vector<Matrix> sigmaprofile_gas;
+    vector<Coordinate> Jprofile_gas;
     //@}
+
 #endif
 
 #ifdef STARON
@@ -1095,8 +1111,15 @@ struct PropData
     Matrix eigvec_star;
     ///mean age,metallicty
     Double_t t_star,Z_star;
+    ///variation age,metallicty
+    Double_t t_star_sigma,Z_star_sigma;
     ///physical properties for dynamical state
     Double_t Efrac_star,Pot_star,T_star;
+    ///profiles
+    vector<Double_t> massprofile_star;
+    vector<Coordinate> velprofile_star;
+    vector<Matrix> sigmaprofile_star;
+    vector<Coordinate> Jprofile_star;
     //@}
 #endif
 
@@ -1109,6 +1132,8 @@ struct PropData
     Double_t M_bh;
     ///mean accretion rate,metallicty
     Double_t acc_bh;
+    ///pos/vel info
+    Coordinate cm_bh,cmvel_bh;
     //@}
 #endif
 
@@ -1168,6 +1193,7 @@ struct PropData
 #endif
 #ifdef BHON
         n_bh=M_bh=0;
+        cm_bh[0]=cm_bh[1]=cm_bh[2]=cmvel_bh[0]=cmvel_bh[1]=cmvel_bh[2]=0.;
         acc_bh=0;
 #endif
 #ifdef HIGHRES
@@ -1199,6 +1225,7 @@ struct PropData
         gMvir*=opt.h;
         gM200c*=opt.h;
         gM200m*=opt.h;
+        gM500c*=opt.h;
         gMFOF*=opt.h;
         gsize*=opt.h/opt.a;
         gRmbp*=opt.h/opt.a;
@@ -1206,6 +1233,7 @@ struct PropData
         gRvir*=opt.h/opt.a;
         gR200c*=opt.h/opt.a;
         gR200m*=opt.h/opt.a;
+        gR500c*=opt.h/opt.a;
         gJ=gJ*opt.h*opt.h/opt.a;
         gJ200m=gJ200m*opt.h*opt.h/opt.a;
         gJ200c=gJ200c*opt.h*opt.h/opt.a;
@@ -1284,6 +1312,8 @@ struct PropData
         Fout.write((char*)&val,sizeof(val));
         val=gM200c;
         Fout.write((char*)&val,sizeof(val));
+        val=gM500c;
+        Fout.write((char*)&val,sizeof(val));
         val=gMvir;
         Fout.write((char*)&val,sizeof(val));
 
@@ -1297,6 +1327,8 @@ struct PropData
         val=gR200m;
         Fout.write((char*)&val,sizeof(val));
         val=gR200c;
+        Fout.write((char*)&val,sizeof(val));
+        val=gR500c;
         Fout.write((char*)&val,sizeof(val));
         val=gRvir;
         Fout.write((char*)&val,sizeof(val));
@@ -1449,6 +1481,10 @@ struct PropData
         Fout.write((char*)&idval,sizeof(idval));
         val=M_bh;
         Fout.write((char*)&val,sizeof(val));
+        for (int k=0;k<3;k++) val3[k]=cm_bh[k];
+        Fout.write((char*)val3,sizeof(val)*3);
+        for (int k=0;k<3;k++) val3[k]=cmvel_bh[k];
+        Fout.write((char*)val3,sizeof(val)*3);
 #endif
 #ifdef HIGHRES
         idval=n_interloper;
@@ -1479,12 +1515,14 @@ struct PropData
         Fout<<gMFOF<<" ";
         Fout<<gM200m<<" ";
         Fout<<gM200c<<" ";
+        Fout<<gM500c<<" ";
         Fout<<gMvir<<" ";
         Fout<<Efrac<<" ";
         Fout<<gRvir<<" ";
         Fout<<gsize<<" ";
         Fout<<gR200m<<" ";
         Fout<<gR200c<<" ";
+        Fout<<gR500c<<" ";
         Fout<<gRvir<<" ";
         Fout<<gRhalfmass<<" ";
         Fout<<gRmaxvel<<" ";
@@ -1514,7 +1552,6 @@ struct PropData
         Fout<<M_gas<<" ";
         Fout<<M_gas_rvmax<<" ";
         Fout<<M_gas_30kpc<<" ";
-        //Fout<<M_gas_50kpc<<" ";
         Fout<<M_gas_500c<<" ";
         for (int k=0;k<3;k++) Fout<<cm_gas[k]<<" ";
         for (int k=0;k<3;k++) Fout<<cmvel_gas[k]<<" ";
@@ -1538,7 +1575,6 @@ struct PropData
         Fout<<M_star<<" ";
         Fout<<M_star_rvmax<<" ";
         Fout<<M_star_30kpc<<" ";
-        //Fout<<M_star_50kpc<<" ";
         Fout<<M_star_500c<<" ";
         for (int k=0;k<3;k++) Fout<<cm_star[k]<<" ";
         for (int k=0;k<3;k++) Fout<<cmvel_star[k]<<" ";
@@ -1557,6 +1593,8 @@ struct PropData
 #ifdef BHON
         Fout<<n_bh<<" ";
         Fout<<M_bh<<" ";
+        for (int k=0;k<3;k++) Fout<<cm_bh[k]<<" ";
+        for (int k=0;k<3;k++) Fout<<cmvel_bh[k]<<" ";
 #endif
 #ifdef HIGHRES
         Fout<<n_interloper<<" ";
@@ -1651,12 +1689,14 @@ struct PropDataHeader{
         headerdatainfo.push_back("Mass_FOF");
         headerdatainfo.push_back("Mass_200mean");
         headerdatainfo.push_back("Mass_200crit");
+        headerdatainfo.push_back("Mass_500crit");
         headerdatainfo.push_back("Mass_BN97");
         headerdatainfo.push_back("Efrac");
         headerdatainfo.push_back("Rvir");
         headerdatainfo.push_back("R_size");
         headerdatainfo.push_back("R_200mean");
         headerdatainfo.push_back("R_200crit");
+        headerdatainfo.push_back("R_500crit");
         headerdatainfo.push_back("R_BN97");
         headerdatainfo.push_back("R_HalfMass");
         headerdatainfo.push_back("Rmax");
@@ -1738,7 +1778,6 @@ struct PropDataHeader{
         headerdatainfo.push_back("M_gas");
         headerdatainfo.push_back("M_gas_Rvmax");
         headerdatainfo.push_back("M_gas_30kpc");
-        //headerdatainfo.push_back("M_gas_50kpc");
         headerdatainfo.push_back("M_gas_500c");
         headerdatainfo.push_back("Xc_gas");
         headerdatainfo.push_back("Yc_gas");
@@ -1798,7 +1837,6 @@ struct PropDataHeader{
         headerdatainfo.push_back("M_star");
         headerdatainfo.push_back("M_star_Rvmax");
         headerdatainfo.push_back("M_star_30kpc");
-        //headerdatainfo.push_back("M_star_50kpc");
         headerdatainfo.push_back("M_star_500c");
         headerdatainfo.push_back("Xc_star");
         headerdatainfo.push_back("Yc_star");
@@ -1853,6 +1891,12 @@ struct PropDataHeader{
         adiospredtypeinfo.push_back(ADIOS_DATATYPES::adios_unsigned_long);
 #endif
         headerdatainfo.push_back("M_bh");
+        headerdatainfo.push_back("Xc_bh");
+        headerdatainfo.push_back("Yc_bh");
+        headerdatainfo.push_back("Zc_bh");
+        headerdatainfo.push_back("VXc_bh");
+        headerdatainfo.push_back("VYc_bh");
+        headerdatainfo.push_back("VZc_bh");
 #ifdef USEHDF
         sizeval=predtypeinfo.size();
         for (int i=sizeval;i<headerdatainfo.size();i++) predtypeinfo.push_back(desiredproprealtype[0]);
