@@ -101,6 +101,8 @@ int main(int argc,char **argv)
     Int_t *pfofall;
     //to store information about the group
     PropData *pdata=NULL,*pdatahalos=NULL;
+    //to store profiles
+    vector<ProfilePropData> profiledata;
 
     //to store time and output time taken
     double time1,tottime;
@@ -461,9 +463,10 @@ int main(int argc,char **argv)
     //if separate files explicitly save halos, associated baryons, and subhalos separately
     if (opt.iseparatefiles) {
     if (nhalos>0) {
-        pglist=SortAccordingtoBindingEnergy(opt,Nlocal,Part,nhalos,pfof,numingroup,pdata);//alters pglist so most bound particles first
+        pglist=SortAccordingtoBindingEnergy(opt,Nlocal,Part,nhalos,pfof,numingroup,pdata,profiledata);//alters pglist so most bound particles first
         WriteProperties(opt,nhalos,pdata);
         WriteGroupCatalog(opt, nhalos, numingroup, pglist, Part,ngroup-nhalos);
+        if (opt.profileinfo.iaverageprofile) WriteProfiles(opt,profiledata.size(),profiledata);
         //if baryons have been searched output related gas baryon catalogue
         if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
             WriteGroupPartType(opt, nhalos, numingroup, pglist, Part);
@@ -492,9 +495,10 @@ int main(int argc,char **argv)
     }
 
     if (ng>0) {
-        pglist=SortAccordingtoBindingEnergy(opt,nbodies,Part,ng,pfof,&numingroup[indexii],&pdata[indexii],indexii);//alters pglist so most bound particles first
+        pglist=SortAccordingtoBindingEnergy(opt,nbodies,Part,ng,pfof,&numingroup[indexii],&pdata[indexii],profiledata,indexii);//alters pglist so most bound particles first
         WriteProperties(opt,ng,&pdata[indexii]);
         WriteGroupCatalog(opt, ng, &numingroup[indexii], pglist, Part);
+        if (opt.profileinfo.iaverageprofile) WriteProfiles(opt,profiledata.size(),profiledata);
         if (opt.iseparatefiles) WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,1);
         else WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,-1);
         if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
@@ -506,6 +510,7 @@ int main(int argc,char **argv)
     else {
         WriteProperties(opt,ng,NULL);
         WriteGroupCatalog(opt,ng,&numingroup[indexii],NULL,Part);
+        if (opt.profileinfo.iaverageprofile) WriteProfiles(opt,0,profiledata);
         if (opt.iseparatefiles) WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,1);
         else WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,-1);
         if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){

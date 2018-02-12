@@ -365,7 +365,7 @@ private(j,v2,Ti)
 #ifdef USEOPENMP
 }
 #endif
-        pdata[i].T=Tval;pdata[i].Efrac=Efracval;pdata[i].Pot=Potval;
+        pdata[i].T=Tval;pdata[i].Efrac=Efracval;pdata[i].Pot=0.5*Potval;//1/2 to account for double counting
         pdata[i].Efrac/=(Double_t)numingroup[i];
     }
     //we then write the properties
@@ -2886,7 +2886,8 @@ private(j,v2,Ti)
     Sort particles according to their binding energy and return a double pointer of Int_t s.
     This code first sorts particles according to their (local mpi) group id and calculates center of mass and binding energy.
 */
-Int_t **SortAccordingtoBindingEnergy(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *numingroup, PropData *pdata, Int_t ioffset)
+Int_t **SortAccordingtoBindingEnergy(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof,
+    Int_t *numingroup, PropData *pdata, vector<ProfilePropData> &profiledata, Int_t ioffset)
 {
 #ifndef USEMPI
     int ThisTask=0;

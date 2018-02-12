@@ -238,8 +238,21 @@ void usage(void)
     \arg <b> \e Virial_density </b> virial overdensity in units of the background matter density used in cosmological simulations. This is not absolutely necessary for gadget format as for this input, the Bryan & Norman 1998 virial density is calculated based on a LCDM cosmology as \ref Options.virlevel is set to -1 and if left, a virial density is calculated. If set and a gadget input is used, this overrides the Bryan & Norman calculation. \n
     \arg <b> \e Critical_density </b> critical density in input units used in cosmological simulations. This is not absolutely necessary for gadget format as it can be calculated from the quantities in the header for typical GR cosmologies. \ref Options.rhobg \n
 
+    \section profileconfigs Profile calculation configuration options
+    \arg <b> \e Profile_type </b> How radial bins are normalized, see \ref ProfilePropInfo.iradnorm \n
+        - \b 1 \e normalize by halo R(V_max), radius of maximum circular velocity
+        - \b 2 \e normalize by halo R(200crit), radius of 200crit density
+        - \b 3 \e bins are in physical internal units
+    \arg <b> \e Profile_spacing_type </b> log (1) or linear (2), equal mass (3) radial spacing \ref ProfilePropInfo.iradspacing \n
+    \arg <b> \e Profile_num_rad_bins </b> Number of radial bins \ref ProfilePropInfo.numradbin \n
+    \arg <b> \e Profile_rmax </b> Outer edge of last radial bin \ref ProfilePropInfo.rmax \n
+    \arg <b> \e Profile_rmin </b> Inner edge first radial bins \ref ProfilePropInfo.rmin \n
+    \arg <b> \e Profile_average_halos_flag </b> Whether to average halos below a resolution limit \ref ProfilePropInfo.iaverageprofile \n
+    \arg <b> \e Profile_min_npart </b> Minimium resolution below which halo profiles are averaged \ref ProfilePropInfo.npartmin \n
+    \arg <b> \e Profile_average_delta_npart </b> Bin width in log npart of halos to be used to construct average profiles \ref ProfilePropInfo.deltalogn \n
+
     \section otherconfigs Other configuration options
-    \arg <b> \e Effective_Resolution </b> If running a multiple resolution cosmological zoom simulation, simple method of scaling the linking length by using the period, ie: \f$ p/N_{\rm eff} \f$ \ref Options.Neff \n
+    \arg <b> \e Effective_resolution </b> If running a multiple resolution cosmological zoom simulation, simple method of scaling the linking length by using the period, ie: \f$ p/N_{\rm eff} \f$ \ref Options.Neff \n
     \arg <b> \e Snapshot_value</b> If halo ids need to be offset to some starting value based on the snapshot of the output, which is useful for some halo merger tree codes, one can specific a snapshot number, and all halo ids will be listed as internal haloid + \f$ sn\times10^{12}\f$. \ref Options.snapshotvalue \n
     \arg <b> \e Verbose </b> 2/1/0 flag indicating how talkative the code is (2 very verbose, 1 verbose, 0 quiet). \ref Options.iverbose \n
     \arg <b> \e Inclusive_halo_mass </b> 1/0 flag indicating whether inclusive masses are calculated for field objects. \ref Options.iInclusiveHalo \n
@@ -253,12 +266,12 @@ void usage(void)
     \arg <b> \e Extensive_halo_properties_output </b> 1/0 flag indicating whether to calculate/output even more halo properties. \ref Options.iextrahalooutput \n
     \arg <b> \e Extended_output </b> 1/0 flag indicating whether produce extended output for quick particle extraction from input catalog of particles in structures \ref Options.iextendedoutput \n
     \arg <b> \e Comoving_units </b> 1/0 flag indicating whether the properties output is in physical or comoving little h units. \ref Options.icomoveunit \n
-    
+
     \section inputflags input flags related to varies input formats
     \arg <b> \e NSPH_extra_blocks </b> If gadget snapshot is loaded one can specific the number of extra <b> SPH </b> blocks are read/in the file. \ref Options.gnsphblocks \n
     \arg <b> \e NStar_extra_blocks </b> If gadget snapshot is loaded one can specific the number of extra <b> Star </b> blocks are read/in the file. \ref Options.gnstarblocks \n
     \arg <b> \e NBH_extra_blocks </b> If gadget snapshot is loaded one can specific the number of extra <b> Black hole </b> blocks are read/in the file. \ref Options.gnbhblocks \n
-    
+
     \arg <b> \e HDF_name_convention </b> HDF dataset naming convection. See \ref hdfitems.h for what naming conventions are available and what names exist. Currently have \ref HDFNUMNAMETYPES. \ref Options.ihdfnameconvention \n
     \arg <b> \e Input_includes_star_particle </b> If star particle specific information is in the input file. \ref Options.iusestarparticles \n
     \arg <b> \e Input_includes_bh_particle </b> If bh/sink particle specific information is in the input file. \ref Options.iusesinkparticles \n
@@ -570,7 +583,7 @@ void GetParamFile(Options &opt)
                         opt.iusetracerparticles = atoi(vbuff);
                     else if (strcmp(tbuff, "Input_includes_extradm_particle")==0)
                         opt.iuseextradarkparticles = atoi(vbuff);
-                    
+
                 }
             }
         }

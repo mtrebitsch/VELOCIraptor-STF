@@ -67,6 +67,8 @@ void WriteGroupCatalog(Options &opt, const Int_t ngroups, Int_t *numingroup, Int
 void WriteGroupPartType(Options &opt, const Int_t ngroups, Int_t *numingroup, Int_t **pglist, Particle *Part);
 ///Writes the bulk properties of the substructures
 void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata);
+///Writes the bulk properties of the substructures
+void WriteProfiles(Options &opt, const Int_t ngroups, vector<ProfilePropData> &profiledata);
 ///Writes the structure hierarchy
 //void WriteHierarchy(Options &opt, Int_t ngroups, int subflag=0);
 void WriteHierarchy(Options &opt, const Int_t &ngroups, const Int_t &nhierarchy, const Int_t &nfield, Int_t *nsub, Int_t *parentgid, Int_t *stype,int subflag=0);
@@ -275,6 +277,9 @@ void ReorderInclusiveMasses(const Int_t &nold, const Int_t &nnew, Int_t *&numing
 ///Get Binding Energy
 void GetBindingEnergy(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *&numingroup, PropData *&pdata, Int_t *&noffset);
 
+///Get radial profiles
+void GetProfiles(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *&numingroup, vector<ProfilePropData> &profiledata, Int_t *&noffset);
+
 ///Get Morphology properties
 void GetGlobalSpatialMorphology(const Int_t nbodies, Particle *p, Double_t& q, Double_t& s, Double_t Error, Matrix& eigenvec, int imflag=0, int itype=-1, int iiterate=1);
 ///Calculate inertia tensor and eigvector
@@ -306,7 +311,8 @@ double mycNFW_deriv(double c, void *params);
 double mycNFW_fdf(double c, void *params, double*y,double *dy);
 
 ///used to sort a pglist based on substructure binding energy
-Int_t **SortAccordingtoBindingEnergy(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *numingroup, PropData *pdata, Int_t ioffset=0);
+Int_t **SortAccordingtoBindingEnergy(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *numingroup,
+    PropData *pdata, vector<ProfilePropData> &profiledata, Int_t ioffset=0);
 ///used to calculate properties and ignores keeping particle order, assumes particle PID information meaningless
 void CalculateHaloProperties(Options &opt, const Int_t nbodies, Particle *&Part, Int_t ngroup, Int_t *&pfof, Int_t *numingroup, PropData *pdata);
 ///Get number of substructures in a given structure

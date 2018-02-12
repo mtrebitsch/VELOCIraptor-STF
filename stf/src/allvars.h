@@ -202,7 +202,6 @@ using namespace NBody;
 //@}
 //@}
 
-
 ///\defgroup OUTPUTTYPES
 //@{
 /// \name defining format types of output
@@ -213,9 +212,9 @@ using namespace NBody;
 #define OUTADIOS 3
 //@}
 //@}
+
 /// \name For Unbinding
 //@{
-
 ///number below which just use PP calculation for potential, which occurs roughly at when n~2*log(n) (from scaling of n^2 vs n ln(n) for PP vs tree and factor of 2 is
 ///for extra overhead in producing tree. For reasonable values of n (>100) this occurs at ~100. Here to account for extra memory need for tree, we use n=3*log(n) or 150
 #define UNBINDNUM 150
@@ -227,7 +226,27 @@ using namespace NBody;
 #define CMVELREF 0
 ///use the particle at potential minimum. Issues if too few particles used as particles will move in and out of deepest point of the potential well
 #define POTREF 1
+//@}
 
+///\defgroup PROFILETYPES
+//@{
+/// \name defining how radial bins are normalized
+//@{
+#define  NUMRADNORM 3
+///normalize relative to rmax
+#define  RADNORMPROFILERMAX 1
+///normalize relative to 200crit
+#define  RADNORMPROFILER200CRIT 2
+///normalize relative to physical
+#define  RADNORMPROFILEPHYS 3
+//@}
+/// \name defining radial spacing
+//@{
+#define  NUMRADSPACING 3
+#define  RADSPACINGLOG 1
+#define  RADSPACINGLIN 2
+#define  RADSPACINGEQUALMASS 3
+//@}
 //@}
 
 /// \name For Tree potential calculation
@@ -324,6 +343,37 @@ struct PropInfo
     PropInfo(){
         cmfrac=0.1;
         cmadjustfac=0.7;
+    }
+};
+
+/// Structure stores information used when producing profiles
+/// which is used in \ref substructureproperties.cxx
+struct ProfilePropInfo
+{
+    ///normalization of the radial bins
+    int iradnorm;
+    ///type of radial spacing
+    int iradspacing;
+    ///number of radial bins
+    int numradbin;
+    ///edges of radial bins
+    Double_t rmin,rmax;
+    ///average halos below some resolution threshold
+    int iaverageprofile;
+    ///if averaging profiles, resolution above which do not average
+    Double_t npartmin;
+    ///average halos within delta log n of npart;
+    Double_t deltalogn;
+
+    ProfilePropInfo(){
+        iradnorm=RADNORMPROFILERMAX;
+        iradspacing=RADSPACINGLOG;
+        numradbin=40;
+        rmax=3.5;
+        rmin=0.01;
+        iaverageprofile=1;
+        npartmin=1000;
+        deltalogn=0.5;
     }
 };
 
@@ -468,6 +518,9 @@ struct Options
     UnbindInfo uinfo;
     ///structure that contains variables for property calculation
     PropInfo pinfo;
+    ///structure that contains variables for profile calculations
+    ProfilePropInfo profileinfo;
+    ///actually calculate profiles
 
     ///effective resolution for zoom simulations
     Int_t Neff;
@@ -1054,13 +1107,6 @@ struct PropData
     Double_t RV_Krot;
     //@}
 
-    ///\name profiles of mass, velocity, angular momentum
-    //@{
-    vector<Double_t> massprofile;
-    vector<Coordinate> velprofile;
-    vector<Matrix> sigmaprofile;
-    vector<Coordinate> Jprofile;
-    //@}
 
 #ifdef GASON
     ///\name gas specific quantities
@@ -1084,11 +1130,6 @@ struct PropData
     Double_t Temp_gas_sigma,Z_gas_sigma,SFR_gas_sigma;
     ///physical properties for dynamical state
     Double_t Efrac_gas,Pot_gas,T_gas;
-    ///profiles
-    vector<Double_t> massprofile_gas;
-    vector<Coordinate> velprofile_gas;
-    vector<Matrix> sigmaprofile_gas;
-    vector<Coordinate> Jprofile_gas;
     //@}
 
 #endif
@@ -1115,11 +1156,6 @@ struct PropData
     Double_t t_star_sigma,Z_star_sigma;
     ///physical properties for dynamical state
     Double_t Efrac_star,Pot_star,T_star;
-    ///profiles
-    vector<Double_t> massprofile_star;
-    vector<Coordinate> velprofile_star;
-    vector<Matrix> sigmaprofile_star;
-    vector<Coordinate> Jprofile_star;
     //@}
 #endif
 
@@ -1601,6 +1637,109 @@ struct PropData
         Fout<<M_interloper<<" ";
 #endif
         Fout<<endl;
+    }
+#ifdef USEHDF
+    ///write (append) the properties data to an already open hdf file
+    void WriteHDF(H5File &Fhdf, DataSpace *&dataspaces, DataSet *&datasets, Options&opt){
+    };
+#endif
+};
+
+
+/*! structure stores profiles of halo(s)
+    \f$ m,\ (x,y,z)_{\rm cm},\ (vx,vy,vz)_{\rm cm},\ V_{\rm max},\ R_{\rm max}, \f$
+    which is calculated in \ref substructureproperties.cxx
+*/
+struct ProfilePropData
+{
+    ///\name number of halos used to construct profile and id (which can be -1 for profiles that are an average of many halos)
+    //@{
+    Int_t numhalos;
+    vector<long long> haloid;
+    //@}
+
+    ///\name profiles of mass, velocity, angular momentum
+    //@{
+    vector<Double_t> numprofile;
+    vector<Double_t> massprofile;
+    vector<Coordinate> velprofile;
+    vector<Matrix> sigmaprofile;
+    vector<Coordinate> Jprofile;
+    ///radial bins
+    vector<Double_t> radbins;
+    //@}
+
+#ifdef GASON
+    ///\name gas specific quantities
+    //@{
+    ///profiles
+    vector<Double_t> numprofile_gas;
+    vector<Double_t> massprofile_gas;
+    vector<Coordinate> velprofile_gas;
+    vector<Matrix> sigmaprofile_gas;
+    vector<Coordinate> Jprofile_gas;
+    vector<Double_t> Zmetprofile_gas;
+    vector<Double_t> Tempprofile_gas;
+    vector<Double_t> SFRprofile_gas;
+    //@}
+
+#endif
+
+#ifdef STARON
+    ///\name star specific quantities
+    //@{
+    vector<Double_t> numprofile_star;
+    vector<Double_t> massprofile_star;
+    vector<Coordinate> velprofile_star;
+    vector<Matrix> sigmaprofile_star;
+    vector<Coordinate> Jprofile_star;
+    vector<Double_t> Zmetprofile_star;
+    vector<Double_t> Tageprofile_gas;
+    //@}
+#endif
+
+#ifdef BHON
+#endif
+
+#ifdef HIGHRES
+#endif
+
+    ProfilePropData(){
+        numhalos=0;
+#ifdef GASON
+#endif
+#ifdef STARON
+#endif
+#ifdef BHON
+#endif
+#ifdef HIGHRES
+#endif
+    }
+    ///equals operator, useful if want inclusive information before substructure search
+    ProfilePropData& operator=(const ProfilePropData &p){
+        numhalos=p.numhalos;
+        return *this;
+    }
+
+    ///converts the properties data into comoving little h values
+    ///so masses, positions have little h values and positions are comoving
+    void ConverttoComove(Options &opt){
+#ifdef GASON
+#endif
+#ifdef STARON
+#endif
+#ifdef BHON
+#endif
+#ifdef HIGHRES
+#endif
+    }
+
+    ///write (append) the properties data to an already open binary file
+    void WriteBinary(fstream &Fout, Options&opt){
+    }
+
+    ///write (append) the properties data to an already open ascii file
+    void WriteAscii(fstream &Fout, Options&opt){
     }
 #ifdef USEHDF
     ///write (append) the properties data to an already open hdf file

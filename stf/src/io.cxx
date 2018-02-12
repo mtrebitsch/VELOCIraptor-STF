@@ -1561,7 +1561,19 @@ void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
 #endif
 
 }
-//@}
+
+///Writes the profiles of halos
+void WriteProfiles(Options &opt, const Int_t nprofiles, vector<ProfilePropData> &profiledata){
+    fstream Fout;
+    char fname[1000];
+    char buf[40];
+
+    //if need to convert from physical back to comoving
+    if (opt.icomoveunit) {
+        opt.p*=opt.h/opt.a;
+        for (auto i=0;i<nprofiles;i++) profiledata[i].ConverttoComove(opt);
+    }
+}
 
 ///\name Writes the hierarchy of structures
 void WriteHierarchy(Options &opt, const Int_t &ngroups, const Int_t & nhierarchy, const Int_t &nfield, Int_t *nsub, Int_t *parentgid, Int_t *stype, int subflag){
