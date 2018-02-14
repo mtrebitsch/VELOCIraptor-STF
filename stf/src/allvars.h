@@ -399,6 +399,12 @@ struct Options
     int iextendedoutput;
     /// output extra fields in halo properties
     int iextrahalooutput;
+    /// output radial profiles of halos
+    int iprofileoutput;
+    /// number of radial bins to use when calculating profiles
+    int numbinsprofile;
+    /// min number of partcles need to produce t_profile_star
+    int minnpartprofile;
     ///disable particle id related output like fof.grp or catalog_group data. Useful if just want halo properties
     ///and not interested in tracking. Code writes halo properties catalog and exits.
     int inoidoutput;
@@ -1297,6 +1303,7 @@ struct PropData
 #endif
 #ifdef BHON
         M_bh*=opt.h;
+        cm_bh=cm_bh*opt.h/opt.a;
 #endif
 #ifdef HIGHRES
         M_interloper*=opt.h;
@@ -1643,6 +1650,7 @@ struct PropData
     void WriteHDF(H5File &Fhdf, DataSpace *&dataspaces, DataSet *&datasets, Options&opt){
     };
 #endif
+
 };
 
 
@@ -1724,22 +1732,123 @@ struct ProfilePropData
     ///converts the properties data into comoving little h values
     ///so masses, positions have little h values and positions are comoving
     void ConverttoComove(Options &opt){
+            for (auto i=0;i<opt.numbinsprofile;i++) {
+                massprofile[i]*=opt.h;
+                Jprofile[i]=Jprofile[i]*(opt.h*opt.h/opt.a);
 #ifdef GASON
+                massprofile_gas[i]*=opt.h;
+                Jprofile_gas[i]=Jprofile_gas[i]*(opt.h*opt.h/opt.a);
 #endif
 #ifdef STARON
+                massprofile_star[i]*=opt.h;
+                Jprofile_star[i]=Jprofile_star[i]*(opt.h*opt.h/opt.a);
 #endif
+            }
+    }
+
+    ///write ascii profiles
+    void WriteProfilesAscii(fstream &Fout, Options&opt){
+        //if (num<opt.minnpartprofile) return;
+        //Fout<<haloid<<" ";
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<massprofile[i]<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<velprofile[i][j]<<" ";
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<sigmaprofile[i](j,k)<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<Jprofile[i][j]<<" ";
+
+#ifdef GASON
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<massprofile_gas[i]<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<velprofile_gas[i][j]<<" ";
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) for (auto i=0;i<opt.numbinsprofile;i++) Fout<<sigmaprofile_gas[i](j,k)<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++) Fout<<Jprofile_gas[i][j]<<" ";
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<Tempprofile_gas[i]<<" ";
+#ifdef STARON
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<Zprofile_gas[i]<<" ";
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<SFRprofile_gas[i]<<" ";
+#endif
+#endif
+
+#ifdef STARON
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<massprofile_star[i]<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<velprofile_star[i][j]<<" ";
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) for (auto i=0;i<opt.numbinsprofile;i++) Fout<<sigmaprofile_star[i](j,k)<<" ";
+        for (auto j=0;j<3;j++) for (auto i=0;i<opt.numbinsprofile;i++)  Fout<<Jprofile_star[i][j]<<" ";
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<tprofile_star[i]<<" ";
+        for (auto i=0;i<opt.numbinsprofile;i++) Fout<<Zprofile_star[i]<<" ";
+#endif
+
 #ifdef BHON
 #endif
 #ifdef HIGHRES
 #endif
+        Fout<<endl;
     }
 
-    ///write (append) the properties data to an already open binary file
     void WriteBinary(fstream &Fout, Options&opt){
-    }
-
-    ///write (append) the properties data to an already open ascii file
-    void WriteAscii(fstream &Fout, Options&opt){
+        //if (num<opt.minnpartprofile) return;
+        long unsigned idval;
+        //maximum size of data
+        double *data=new double[opt.numbinsprofile];
+        //idval=haloid;
+        Fout.write((char*)&idval,sizeof(idval));
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=massprofile[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=velprofile[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=sigmaprofile[i](j,k);
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Jprofile[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+#ifdef GASON
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=massprofile_gas[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=velprofile_gas[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=sigmaprofile_gas[i](j,k);
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Jprofile_gas[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Tempprofile_gas[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+#ifdef STARON
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Zmetprofile_gas[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=SFRprofile_gas[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+#endif
+#endif
+#ifdef STARON
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=massprofile_star[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=velprofile_star[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) for (auto k=0;k<3;k++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=sigmaprofile_star[i](j,k);
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto j=0;j<3;j++) {
+            for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Jprofile_star[i][j];
+            Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        }
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=tprofile_star[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+        for (auto i=0;i<opt.numbinsprofile;i++) data[i]=Zmetprofile_star[i];
+        Fout.write((char*)data,sizeof(double)*opt.numbinsprofile);
+#endif
+        delete[] data;
     }
 #ifdef USEHDF
     ///write (append) the properties data to an already open hdf file
@@ -2070,6 +2179,137 @@ struct PropDataHeader{
 
         }
 
+    }
+};
+
+/*! Structures stores header info of the data writen by the \ref PropData data structure related to profiles
+    specifically the \ref PropData::WriteBinaryProfile, \ref PropData::WriteAsciiProfile, routines
+    Must ensure that these routines are all altered together so that the io makes sense.
+*/
+struct ProfileDataHeader{
+    //list the header info
+    vector<string> headerdatainfo;
+#ifdef USEHDF
+    vector<PredType> predtypeinfo;
+#endif
+#ifdef USEADIOS
+    vector<ADIOS_DATATYPES> adiospredtypeinfo;
+#endif
+    ProfileDataHeader(Options&opt){
+        int sizeval;
+#ifdef USEHDF
+        vector<PredType> desiredproprealtype;
+        if (sizeof(Double_t)==sizeof(double)) desiredproprealtype.push_back(PredType::NATIVE_DOUBLE);
+        else desiredproprealtype.push_back(PredType::NATIVE_FLOAT);
+#endif
+#ifdef USEADIOS
+        vector<ADIOS_DATATYPES> desiredadiosproprealtype;
+        if (sizeof(Double_t)==sizeof(double)) desiredadiosproprealtype.push_back(ADIOS_DATATYPES::adios_double);
+        else desiredadiosproprealtype.push_back(ADIOS_DATATYPES::adios_real);
+#endif
+
+        headerdatainfo.push_back("ID");
+        //if using hdf, store the type
+#ifdef USEHDF
+        predtypeinfo.push_back(PredType::STD_U64LE);
+#endif
+#ifdef USEADIOS
+        adiospredtypeinfo.push_back(ADIOS_DATATYPES::adios_unsigned_long);
+#endif
+
+        headerdatainfo.push_back("Mass_profile");
+        headerdatainfo.push_back("Vx_profile");
+        headerdatainfo.push_back("Vy_profile");
+        headerdatainfo.push_back("Vz_profile");
+        headerdatainfo.push_back("veldisp_xx_profile");
+        headerdatainfo.push_back("veldisp_xy_profile");
+        headerdatainfo.push_back("veldisp_xz_profile");
+        headerdatainfo.push_back("veldisp_yx_profile");
+        headerdatainfo.push_back("veldisp_yy_profile");
+        headerdatainfo.push_back("veldisp_yz_profile");
+        headerdatainfo.push_back("veldisp_zx_profile");
+        headerdatainfo.push_back("veldisp_zy_profile");
+        headerdatainfo.push_back("veldisp_zz_profile");
+        headerdatainfo.push_back("Lx_profile");
+        headerdatainfo.push_back("Ly_profile");
+        headerdatainfo.push_back("Lz_profile");
+
+#ifdef USEHDF
+        sizeval=predtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) predtypeinfo.push_back(desiredproprealtype[0]);
+#endif
+#ifdef USEADIOS
+        sizeval=adiospredtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) adiospredtypeinfo.push_back(desiredadiosproprealtype[0]);
+#endif
+
+#ifdef GASON
+        headerdatainfo.push_back("Mass_profile_gas");
+        headerdatainfo.push_back("Vx_profile_gas");
+        headerdatainfo.push_back("Vy_profile_gas");
+        headerdatainfo.push_back("Vz_profile_gas");
+        headerdatainfo.push_back("veldisp_xx_profile_gas");
+        headerdatainfo.push_back("veldisp_xy_profile_gas");
+        headerdatainfo.push_back("veldisp_xz_profile_gas");
+        headerdatainfo.push_back("veldisp_yx_profile_gas");
+        headerdatainfo.push_back("veldisp_yy_profile_gas");
+        headerdatainfo.push_back("veldisp_yz_profile_gas");
+        headerdatainfo.push_back("veldisp_zx_profile_gas");
+        headerdatainfo.push_back("veldisp_zy_profile_gas");
+        headerdatainfo.push_back("veldisp_zz_profile_gas");
+        headerdatainfo.push_back("Lx_profile_gas");
+        headerdatainfo.push_back("Ly_profile_gas");
+        headerdatainfo.push_back("Lz_profile_gas");
+        headerdatainfo.push_back("T_profile_gas");
+#ifdef STARON
+        headerdatainfo.push_back("Zmet_profile_gas");
+        headerdatainfo.push_back("SFR_profile_gas");
+#endif
+#ifdef USEHDF
+        sizeval=predtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) predtypeinfo.push_back(desiredproprealtype[0]);
+#endif
+#ifdef USEADIOS
+        sizeval=adiospredtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) adiospredtypeinfo.push_back(desiredadiosproprealtype[0]);
+#endif
+#endif
+
+#ifdef STARON
+        headerdatainfo.push_back("Mass_profile_star");
+        headerdatainfo.push_back("Vx_profile_star");
+        headerdatainfo.push_back("Vy_profile_star");
+        headerdatainfo.push_back("Vz_profile_star");
+        headerdatainfo.push_back("veldisp_xx_profile_star");
+        headerdatainfo.push_back("veldisp_xy_profile_star");
+        headerdatainfo.push_back("veldisp_xz_profile_star");
+        headerdatainfo.push_back("veldisp_yx_profile_star");
+        headerdatainfo.push_back("veldisp_yy_profile_star");
+        headerdatainfo.push_back("veldisp_yz_profile_star");
+        headerdatainfo.push_back("veldisp_zx_profile_star");
+        headerdatainfo.push_back("veldisp_zy_profile_star");
+        headerdatainfo.push_back("veldisp_zz_profile_star");
+        headerdatainfo.push_back("Lx_profile_star");
+        headerdatainfo.push_back("Ly_profile_star");
+        headerdatainfo.push_back("Lz_profile_star");
+        headerdatainfo.push_back("t_profile_star");
+        headerdatainfo.push_back("Zmet_profile_star");
+#ifdef USEHDF
+        sizeval=predtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) predtypeinfo.push_back(desiredproprealtype[0]);
+#endif
+#ifdef USEADIOS
+        sizeval=adiospredtypeinfo.size();
+        for (int i=sizeval;i<headerdatainfo.size();i++) adiospredtypeinfo.push_back(desiredadiosproprealtype[0]);
+#endif
+#endif
+
+#ifdef BHON
+#endif
+
+
+#ifdef HIGHRES
+#endif
     }
 };
 

@@ -993,8 +993,7 @@ void WriteGroupPartType(Options &opt, const Int_t ngroups, Int_t *numingroup, In
 
 ///\name Final outputs such as properties and output that can be used to construct merger trees and substructure hierarchy
 //@{
-///Writes the bulk properties of the substructures
-///\todo need to add in 500crit mass and radial output in here and in \ref allvars.h
+///Writes the bulk properties of the (sub)structures
 void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
     fstream Fout;
     char fname[1000];
@@ -1119,32 +1118,6 @@ void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
         attr=Fhdf.createAttribute(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], attrspace);
         attr.write(datagroupnames.propdatatype[itemp],&attrvalue);
         itemp++;
-        /*
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.icosmologicalin,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.icomoveunit,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.p,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.lengthtokpc,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.velocitytokms,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        dataspace=DataSpace(rank,dims);
-        dataset = Fhdf.createDataSet(datagroupnames.prop[itemp], datagroupnames.propdatatype[itemp], dataspace);
-        dataset.write(&opt.masstosolarmass,datagroupnames.propdatatype[itemp]);
-        itemp++;
-        */
 
         //load data spaces
         propdataspace=new DataSpace[head.headerdatainfo.size()];
