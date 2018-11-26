@@ -212,6 +212,7 @@ void usage(void)
     \arg <b> \e Frac_pot_ref </b> Set the fraction of particles used to calculate the velocity of the minimum of the potential (0.1). \ref Options.uinfo & \ref UnbindInfo.fracpotref \n
     \arg <b> \e Unbinding_type </b> Set the unbinding criteria, either just remove particles deemeed "unbound", that is those with \f$ \alpha T+W>0\f$, choosing \ref UPART. Or with \ref USYSANDPART
     removes "unbound" particles till system also has a true bound fraction > \ref UnbindInfo.minEfrac.
+    \arg <b> \e Softening_length </b> Set the (simple plummer) gravitational softening length. \ref UnbindInfo.eps 
 
     \section cosmoconfig Units & Cosmology
     \subsection unitconfig Units
@@ -545,11 +546,13 @@ void GetParamFile(Options &opt)
                     else if (strcmp(tbuff, "Comoving_units")==0)
                         opt.icomoveunit = atoi(vbuff);
                     else if (strcmp(tbuff, "Extensive_halo_properties_output")==0)
-                        opt.iextrahalooutput = atof(vbuff);
+                        opt.iextrahalooutput = atoi(vbuff);
+                    else if (strcmp(tbuff, "Extensive_gas_properties_output")==0)
+                        opt.iextragasoutput = atoi(vbuff);
                     else if (strcmp(tbuff, "Extended_output")==0)
-                        opt.iextendedoutput = atof(vbuff);
+                        opt.iextendedoutput = atoi(vbuff);
                     else if (strcmp(tbuff, "Spherical_overdensity_halo_particle_list_output")==0)
-                        opt.iSphericalOverdensityPartList = atof(vbuff);
+                        opt.iSphericalOverdensityPartList = atoi(vbuff);
 
                     //gadget io related to extra info for sph, stars, bhs,
                     else if (strcmp(tbuff, "NSPH_extra_blocks")==0)
@@ -600,6 +603,17 @@ inline void ConfigCheck(Options &opt)
     if (ThisTask==0)
 #endif
         cerr<<"Conflict in config file: both gas/star/etc particle type search AND the separate baryonic (gas,star,etc) search flag are on. Check config\n";
+#ifdef USEMPI
+            MPI_Abort(MPI_COMM_WORLD,8);
+#else
+            exit(8);
+#endif
+    }
+    if (opt.iBoundHalos && opt.iKeepFOF) {
+#ifdef USEMPI
+    if (ThisTask==0)
+#endif
+        cerr<<"Conflict in config file: Asking for Bound Field objects but also asking to keep the 3DFOF/then run 6DFOF. This is incompatible. Check config\n";
 #ifdef USEMPI
             MPI_Abort(MPI_COMM_WORLD,8);
 #else
