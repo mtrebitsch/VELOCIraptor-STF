@@ -283,7 +283,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=GDMTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
                         for (m=0;m<3;m++) Part[count2].SetPosition(m,LittleFLOAT(ctemp[m]));
                         count2++;
                     }
@@ -335,7 +335,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=GDMTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
                         for (m=0;m<3;m++) Part[count2].SetVelocity(m,LittleFLOAT(ctemp[m]));
                         count2++;
                     }
@@ -406,10 +406,10 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=GDMTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
                         Part[count2].SetPID(idval);
                         Part[count2].SetID(count2);
-                        Part[count2].SetType(GASTYPE);
+                        Part[count2].SetType(k);
                         count2++;
                     }
                 }
@@ -471,7 +471,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=GDMTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
                         Part[count2].SetMass(dtemp);
                         count2++;
                     }
@@ -499,7 +499,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                 if ((opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || (opt.partsearchtype==PSTDARK && opt.iBaryonSearch==1) || opt.partsearchtype==PSTALLBARYONS)) {
                 for(n=0;n<header[i].npart[k];n++) {
                     Fgad[i].read((char*)&ctemp[0], sizeof(FLOAT));
-                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS) {
+                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALLBARYONS) {
 #ifdef GASON
                         Part[count2].SetU(ctemp[0]);
 #endif
@@ -535,7 +535,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                 if ((opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || (opt.partsearchtype==PSTDARK && opt.iBaryonSearch==1)  || opt.partsearchtype==PSTALLBARYONS)) {
                 for(n=0;n<header[i].npart[k];n++) {
                     Fgad[i].read((char*)&ctemp[0], sizeof(FLOAT));
-                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS) {
+                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALLBARYONS) {
                         Part[count2].SetSPHDen(ctemp[0]);
                         count2++;
                     }
@@ -576,7 +576,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                 if ((opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || (opt.partsearchtype==PSTDARK && opt.iBaryonSearch==1) || opt.partsearchtype==PSTALLBARYONS)) {
                 for(n=0;n<header[i].npart[k];n++) {
                     Fgad[i].read((char*)&ctemp[0], sizeof(FLOAT));
-                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS) {
+                    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALLBARYONS) {
 #ifdef STARON
                         Part[count2].SetSFR(ctemp[0]);
 #endif
@@ -654,7 +654,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=DARKTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
                         if (k==GSTARTYPE) {
 #ifdef STARON
                             Part[count2].SetTage(ctemp[0]);
@@ -721,8 +721,8 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                     }
                 }
                 if (opt.partsearchtype==PSTALLBARYONS) {
-                    if (k!=DARKTYPE) {
-                        if (k==GSTARTYPE||k==GGASTYPE) {
+                    if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
+                        if (k==GSTARTYPE||k==GGASTYPE ) {
 #ifdef STARON
                             Part[count2].SetZmet(ctemp[0]);
 #endif
@@ -734,7 +734,6 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
             }
         }
         SKIP2;
-
         //extra star blocks
         for (int nstarblocks=0;nstarblocks<opt.gnstarblocks;nstarblocks++) {
 #ifdef GADGET2FORMAT
@@ -1282,7 +1281,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                         count2++;
                     }
                 }
-                if (opt.partsearchtype==PSTALLBARYONS && k!=DARKTYPE) {
+                if (opt.partsearchtype==PSTALLBARYONS && (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE)) {
                     Pbuf[ibufindex]=Particle(dtemp*mscale,
                         ctemp[0]*lscale,ctemp[1]*lscale,ctemp[2]*lscale,
                         vtemp[0]*opt.V*sqrt(opt.a)+Hubbleflow*ctemp[0],
