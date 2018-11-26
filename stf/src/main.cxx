@@ -90,7 +90,8 @@ int main(int argc,char **argv)
     //variables
     //number of particles, (also number of baryons if use dm+baryon search)
     //to store (point to) particle data
-    Int_t nbodies,nbaryons,ndark;
+    Int_t nbodies, nbaryons, ndark, nbasistype;
+    int typebasis;
     vector<Particle> Part;
     Particle *Pbaryons;
     KDTree *tree;
@@ -396,7 +397,7 @@ int main(int argc,char **argv)
     if (opt.iBaryonSearch>0) {
         time1=MyGetTime();
         if (opt.partsearchtype==PSTDARK) {
-            pfofall=SearchBaryons(opt, nbaryons, Pbaryons, nbodies, Part, pfof, ngroup,nhalos,opt.iseparatefiles,opt.iInclusiveHalo,pdata);
+            pfofall=SearchBaryons(opt, nbaryons, Pbaryons, nbodies, Part, pfof, ngroup, nhalos, opt.iseparatefiles, opt.iInclusiveHalo, pdata);
             pfofbaryons=&pfofall[nbodies];
         }
         //if FOF search overall particle types then running sub search over just dm and need to associate baryons to just dm particles must determine number of baryons, sort list, run search, etc
@@ -405,12 +406,15 @@ int main(int argc,char **argv)
         else if (opt.iSubSearch==1){
             nbaryons=0;
             ndark=0;
+            nbasistype=0;
+            if (opt.partsearchtype==PSTALL) typebasis=DARKTYPE;
+            else if (opt.partsearchtype==PSTALLBARYONS) typebasis=STARTYPE;
             for (Int_t i=0;i<nbodies;i++) {
-                if (Part[i].GetType()==DARKTYPE)ndark++;
+                if (Part[i].GetType()==typebasis) nbasistype++;
                 else nbaryons++;
             }
             Pbaryons=NULL;
-            SearchBaryons(opt, nbaryons, Pbaryons, ndark, Part, pfof, ngroup,nhalos,opt.iseparatefiles,opt.iInclusiveHalo,pdata);
+            SearchBaryons(opt, nbaryons, Pbaryons, nbasistype, Part, pfof, ngroup, nhalos, opt.iseparatefiles, opt.iInclusiveHalo, pdata);
         }
         time1=MyGetTime()-time1;
         cout<<"TIME::"<<ThisTask<<" took "<<time1<<" to search baryons  with "<<nthreads<<endl;
@@ -426,7 +430,7 @@ int main(int argc,char **argv)
     CopyHierarchy(opt,pdata,ngroup,nsub,parentgid,uparentgid,stype);
 
     //if a separate baryon search has been run, now just place all particles together
-    if (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) {
+    if (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) {
         delete[] pfof;
         pfof=&pfofall[0];
         nbodies+=nbaryons;
@@ -476,7 +480,7 @@ int main(int argc,char **argv)
         WriteProperties(opt,nhalos,pdata);
         WriteGroupCatalog(opt, nhalos, numingroup, pglist, Part,ngroup-nhalos);
         //if baryons have been searched output related gas baryon catalogue
-        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
+        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS){
             WriteGroupPartType(opt, nhalos, numingroup, pglist, Part);
         }
         WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype);
@@ -486,7 +490,7 @@ int main(int argc,char **argv)
     else {
         WriteGroupCatalog(opt,nhalos,numingroup,NULL,Part);
         WriteHierarchy(opt,nhalos,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype);
-        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
+        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS){
             WriteGroupPartType(opt, nhalos, numingroup, NULL, Part);
         }
     }
@@ -508,7 +512,7 @@ int main(int argc,char **argv)
         WriteGroupCatalog(opt, ng, &numingroup[indexii], pglist, Part);
         if (opt.iseparatefiles) WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,1);
         else WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,-1);
-        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
+        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS){
             WriteGroupPartType(opt, ng, &numingroup[indexii], pglist, Part);
         }
         for (Int_t i=1;i<=ng;i++) delete[] pglist[i];
@@ -519,7 +523,7 @@ int main(int argc,char **argv)
         WriteGroupCatalog(opt,ng,&numingroup[indexii],NULL,Part);
         if (opt.iseparatefiles) WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,1);
         else WriteHierarchy(opt,ngroup,nhierarchy,psldata->nsinlevel,nsub,parentgid,stype,-1);
-        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL){
+        if (opt.iBaryonSearch>0 || opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS){
             WriteGroupPartType(opt, ng, &numingroup[indexii], NULL, Part);
         }
     }

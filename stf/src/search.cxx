@@ -825,7 +825,7 @@ Int_t* SearchSubset(Options &opt, const Int_t nbodies, const Int_t nsubset, Part
     //set the maximum sublevel for halo core search. Unless star particles really should only be doing this at first sublevel
     maxhalocoresublevel=opt.maxnlevelcoresearch;
     if (opt.partsearchtype==PSTSTAR) maxhalocoresublevel=100;
-    else if (opt.partsearchtype==PSTALLBARYONS) maxhalocoresublevel=100;
+    //else if (opt.partsearchtype==PSTALLBARYONS) maxhalocoresublevel=100;
 
     int minsize=opt.MinSize;
 
