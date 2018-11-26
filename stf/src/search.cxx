@@ -77,15 +77,18 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
     cout<<ThisTask<<" Search particles using 3DFOF in physical space"<<endl;
     cout<<ThisTask<<" Parameters used are : ellphys="<<sqrt(param[6])<<" Lunits (ell^2="<<param[6]<<" and likely "<<sqrt(param[6])/opt.ellxscale<<" in interparticle spacing"<<endl;
     if (opt.partsearchtype==PSTALL && opt.iBaryonSearch>1) {fofcmp=&FOF3dDM;param[7]=DARKTYPE;fofcheck=FOFchecktype;}
+    else if (opt.partsearchtype==PSTALLBARYONS && opt.iBaryonSearch>1) {fofcmp=&FOF3dTyped;param[7]=STARTYPE;fofcheck=FOFchecktype;}
     else fofcmp=&FOF3d;
     //if using mpi no need to locally sort just yet and might as well return the Head, Len, Next arrays
 #ifdef USEMPI
     Head=new Int_tree_t[nbodies];Next=new Int_tree_t[nbodies];
     //posible alteration for all particle search
     if (opt.partsearchtype==PSTALL && opt.iBaryonSearch>1) pfof=tree->FOFCriterionSetBasisForLinks(fofcmp,param,numgroups,minsize,0,0,FOFchecktype,Head,Next);
+    else if (opt.partsearchtype==PSTALLBARYONS && opt.iBaryonSearch>1) pfof=tree->FOFCriterionSetBasisForLinks(fofcmp,param,numgroups,minsize,0,0,FOFchecktype,Head,Next);
     else pfof=tree->FOF(sqrt(param[1]),numgroups,minsize,0,Head,Next);
 #else
     if (opt.partsearchtype==PSTALL && opt.iBaryonSearch>1) pfof=tree->FOFCriterionSetBasisForLinks(fofcmp,param,numgroups,minsize,1,0,FOFchecktype);
+    else if (opt.partsearchtype==PSTALLBARYONS && opt.iBaryonSearch>1) pfof=tree->FOFCriterionSetBasisForLinks(fofcmp,param,numgroups,minsize,1,0,FOFchecktype);
     else pfof=tree->FOF(sqrt(param[1]),numgroups,minsize,1);
 #endif
 
@@ -101,6 +104,8 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
     //if not searching all particle then searching for baryons associated with substructures, then set type to group value
     //so that velocity density just calculated for particles in groups (type>0)
     if (!(opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALL)) for (i=0;i<nbodies;i++) Part[i].SetType(numingroup[pfof[Part[i].GetID()]]>=MINSUBSIZE);
+    //if running all baryons using stars for bases links then do not need to calculate local velocity density.
+    else if (!(opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALL)) for (i=0;i<nbodies;i++) Part[i].SetType(-1);
     //otherwise set type to group value for dark matter
     else {
         for (i=0;i<nbodies;i++) {
@@ -820,6 +825,7 @@ Int_t* SearchSubset(Options &opt, const Int_t nbodies, const Int_t nsubset, Part
     //set the maximum sublevel for halo core search. Unless star particles really should only be doing this at first sublevel
     maxhalocoresublevel=opt.maxnlevelcoresearch;
     if (opt.partsearchtype==PSTSTAR) maxhalocoresublevel=100;
+    else if (opt.partsearchtype==PSTALLBARYONS) maxhalocoresublevel=100;
 
     int minsize=opt.MinSize;
 
@@ -2074,6 +2080,7 @@ void SearchSubSub(Options &opt, const Int_t nsubset, vector<Particle> &Partsubse
 
     nsubsearch=ngroup;sublevel=1;ngroupidoffset=ngroupidoffsetold=0;
     if (opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALL) numingroup=BuildNumInGroupTyped(nsubset, ngroup, pfof, Partsubset.data(), DARKTYPE);
+    else if (opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALLBARYONS) numingroup=BuildNumInGroupTyped(nsubset, ngroup, pfof, Partsubset.data(), STARTYPE);
     else numingroup=BuildNumInGroup(nsubset, ngroup, pfof);
     //since initially groups in order find index of smallest group that can be searched for substructure
     //for (Int_t i=1;i<=ngroup;i++) if (numingroup[i]<MINSUBSIZE) {nsubsearch=i-1;break;}
@@ -2093,6 +2100,7 @@ void SearchSubSub(Options &opt, const Int_t nsubset, vector<Particle> &Partsubse
 
     if (iflag) {
     if (opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALL) pglist=BuildPGListTyped(nsubset, ngroup, numingroup, pfof,Partsubset.data(),DARKTYPE);
+    if (opt.iBaryonSearch>=1 && opt.partsearchtype==PSTALLBARYONS) pglist=BuildPGListTyped(nsubset, ngroup, numingroup, pfof,Partsubset.data(),STARTYPE);
     else pglist=BuildPGList(nsubset, ngroup, numingroup, pfof);
     //now store group ids of (sub)structures that will be searched for (sub)substructure.
     //since at level zero, the particle group list that is going to be used to calculate the background, outliers and searched through is simple pglist here
@@ -2318,7 +2326,9 @@ void SearchSubSub(Options &opt, const Int_t nsubset, vector<Particle> &Partsubse
                 else {
                     //otherwise, just a matter of updating some pointers
                     //store index in the structure list to access the parent (sub)structure
-                    iindex=pfof[subpglist[i][ii]]-ngroupidoffsetold-firstgroupoffset;
+                    //iindex=pfof[subpglist[i][ii]]-ngroupidoffsetold-firstgroupoffset;
+                    //don't need to offset group as already taken care of.
+                    iindex=pfof[subpglist[i][ii]]-ngroupidoffsetold;
                     pcsld->gidhead[iindex]=&pfof[subpglist[i][ii]];
                     pcsld->Phead[iindex]=&Partsubset[subpglist[i][ii]];
                     //only for field haloes does the gidparenthead and giduberparenthead need to be adjusted
@@ -2606,6 +2616,7 @@ private(i)
  * lies on another mpi domain.
  *
  * \todo might use full phase-space tensor association.
+ * \todo might be useful to rename search to associated typed search, make variables like ndark -> nbasistype, ngroupdark -> ngroupbasistype, Pbaryons -> Passociatedtype
 */
 Int_t* SearchBaryons(Options &opt, Int_t &nbaryons, Particle *&Pbaryons, const Int_t ndark, vector<Particle> &Part, Int_t *&pfofdark, Int_t &ngroupdark, Int_t &nhalos, int ihaloflag, int iinclusive, PropData *pdata)
 {
@@ -2628,13 +2639,14 @@ Int_t* SearchBaryons(Options &opt, Int_t &nbaryons, Particle *&Pbaryons, const I
     Int_t nparts=ndark+nbaryons;
     Int_t nhierarchy=1,gidval;
     StrucLevelData *ppsldata,**papsldata;
+    int typebasis=DARKTYPE;
 #ifndef USEMPI
     int ThisTask=0,NProcs=1;
 #endif
 
     cout<<ThisTask<<" search baryons "<<nparts<<" "<<ndark<<endl;
     //if searched all particles in FOF, reorder particles and also the pfof group id array
-    if (opt.partsearchtype==PSTALL) {
+    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS) {
         cout<<" of only baryons in FOF structures as baryons have already been grouped in FOF search "<<endl;
         //store original pfof value
         pfofall=pfofdark;
@@ -2645,8 +2657,10 @@ Int_t* SearchBaryons(Options &opt, Int_t &nbaryons, Particle *&Pbaryons, const I
         pfofbaryons=&pfofall[ndark];
         storeval=new Int_t[nparts];
         storeval2=new Int_t[nparts];
+        if (opt.partsearchtype==PSTALL) typebasis=DARKTYPE;
+        else if (opt.partsearchtype==PSTALLBARYONS) typebasis=STARTYPE;
         for (i=0;i<nparts;i++) {
-            if (Part[i].GetType()==DARKTYPE) Part[i].SetType(-1);
+            if (Part[i].GetType()==typebasis) Part[i].SetType(-1);
             storeval2[i]=Part[i].GetPID();
             Part[i].SetPID(pfofdark[i]);
         }
@@ -2669,7 +2683,7 @@ Int_t* SearchBaryons(Options &opt, Int_t &nbaryons, Particle *&Pbaryons, const I
 #endif
     //if serial can allocate pfofall at this point as the number of particles in local memory will not change
 #ifndef USEMPI
-    if (opt.partsearchtype!=PSTALL) {
+    if (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) {
         pfofall=new Int_t[nbaryons+ndark];
         for (i=0;i<ndark;i++) pfofall[i]=pfofdark[i];
         pfofbaryons=&pfofall[ndark];
@@ -2682,7 +2696,7 @@ Int_t* SearchBaryons(Options &opt, Int_t &nbaryons, Particle *&Pbaryons, const I
     }
 #else
     //if using mpi but all particle FOF search, then everything is localized
-    if (opt.partsearchtype!=PSTALL) {
+    if (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) {
         pfofbaryons=new Int_t[nbaryons];
         for (i=0;i<nbaryons;i++) pfofbaryons[i]=0;
         localdist=new Double_t[nbaryons];
@@ -2773,7 +2787,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
 #endif
 
         //if all particles have been searched for field objects then ignore baryons not associated with a group
-        if (opt.partsearchtype==PSTALL && pfofbaryons[i]==0) continue;
+        if ((opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS) && pfofbaryons[i]==0) continue;
         p1=Pbaryons[i];
         x1=Coordinate(p1.GetPosition());
         rval=dval=MAXVALUE;
@@ -2787,7 +2801,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
             //then particle is checked regardless. If that is not the case, particle is searched only if its current group
             //is smaller than the group of the dm particle being examined.
             //But do not allow baryons to switch between fof structures
-            if (opt.partsearchtype==PSTALL) icheck=((pfofdark[pindex]>nhalos)||(pfofdark[pindex]==baryonfofold));
+            if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS) icheck=((pfofdark[pindex]>nhalos)||(pfofdark[pindex]==baryonfofold));
             else icheck=(numingroup[pfofbaryons[i]]<numingroup[pfofdark[pindex]]);
             if (icheck) {
                 if (fofcmp(p1,Part[nnID[j]],param)) {
@@ -2803,7 +2817,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
                         dval=D2;pfofbaryons[i]=pfofdark[pindex];
                         rval=dist2[j];
 #ifdef USEMPI
-                        if (opt.partsearchtype!=PSTALL) localdist[i]=dval;
+                        if (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) localdist[i]=dval;
 #endif
                     }
                 }
@@ -2823,7 +2837,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
     //in that case must search other mpi domains.
     //if all particles are searched then just need to reset the particle order
     ///\todo need to update this for mpi vector
-    if (opt.partsearchtype!=PSTALL) {
+    if (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) {
         if (opt.iverbose) cout<<ThisTask<<" finished local search"<<endl;
         MPI_Barrier(MPI_COMM_WORLD);
         //determine all tagged dark matter particles that have search areas that overlap another mpi domain
@@ -2918,7 +2932,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
         //sort(Part.begin(), Part.end(), IDCompareVec);
         for (i=0;i<nparts;i++) {
             pfofall[i]=Part[i].GetPID();Part[i].SetPID(storeval2[i]);
-            if (Part[i].GetType()==-1)Part[i].SetType(DARKTYPE);
+            if (Part[i].GetType()==-1)Part[i].SetType(typebasis);
         }
         delete[] storeval;
         delete[] storeval2;
@@ -2927,7 +2941,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
 #else
     //now that search has finished, reset dark matter particles back to prior to search order
     //extra sorts are needed to reset the particles back to input order if all particles were searched initially
-    if (opt.partsearchtype==PSTALL) {
+    if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS ) {
         //reset order
         if (npartingroups>0) delete tree;
         for (i=0;i<ndark;i++) Part[i].SetID(ids[i]);
@@ -2939,7 +2953,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
         //sort(Part.begin(), Part.end(), IDCompareVec);
         for (i=0;i<nparts;i++) {
             pfofall[i]=Part[i].GetPID();Part[i].SetPID(storeval2[i]);
-            if (Part[i].GetType()==-1)Part[i].SetType(DARKTYPE);
+            if (Part[i].GetType()==-1)Part[i].SetType(typebasis);
         }
         delete[] storeval;
         delete[] storeval2;
@@ -2978,7 +2992,7 @@ private(i,tid,p1,pindex,x1,D2,dval,rval,icheck,nnID,dist2,baryonfofold)
         nhierarchy=0;
         while (ppsldata!=NULL) {papsldata[nhierarchy++]=ppsldata;ppsldata=ppsldata->nextlevel;}
         //now parse hierarchy and repoint stuff to the pfofall pointer instead of pfof
-        if (opt.partsearchtype!=PSTALL) {
+        if (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS) {
             for (i=nhierarchy-1;i>=0;i--){
                 for (int j=1;j<=papsldata[i]->nsinlevel;j++) {
                     gidval=(*papsldata[i]->gidhead[j]);

@@ -97,7 +97,7 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
         exit(9);
     }
     //if gas searched in some fashion then load amr/hydro data
-    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
+    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch) ||opt.partsearchtype==PSTALLBARYONS) {
     sprintf(buf1,"%s/hydro_%s.out00001",fname,opt.ramsessnapname);
     sprintf(buf2,"%s/hydro_%s.out",fname,opt.ramsessnapname);
     if (FileExists(buf1)) sprintf(buf,"%s",buf1);
@@ -133,6 +133,7 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     else if (ptype==PSTGAS) {nusetypes=1;usetypes[0]=RAMSESGASTYPE;}
     else if (ptype==PSTSTAR) {nusetypes=1;usetypes[0]=RAMSESSTARTYPE;}
     else if (ptype==PSTBH) {nusetypes=1;usetypes[0]=RAMSESBHTYPE;}
+    else if (ptype==PSTALLBARYONS) {nusetypes=3;usetypes[0]=RAMSESGASTYPE;usetypes[1]=RAMSESSTARTYPE;usetypes[2]=RAMSESBHTYPE;}
 
 
     for (j = 0; j < NRAMSESTYPE; j++) ramses_header_info.npartTotal[j] = 0;
@@ -226,7 +227,7 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     Framses.close();
 
     //reopen to get number of amr cells might need to alter to read grid information and what cells have no so-called son cells
-    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
+    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)||opt.partsearchtype==PSTALLBARYONS) {
     for (i=0;i<ramses_header_info.num_files;i++) {
         sprintf(buf1,"%s/amr_%s.out%05d",fname,opt.ramsessnapname,i+1);
         sprintf(buf2,"%s/amr_%s.out",fname,opt.ramsessnapname);
@@ -415,9 +416,9 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
 
     for (j=0;j<NPARTTYPES;j++) opt.numpart[j]=0;
     if (ptype==PSTALL || ptype==PSTDARK) opt.numpart[DARKTYPE]=ramses_header_info.npartTotal[RAMSESDMTYPE];
-    if (ptype==PSTALL || ptype==PSTGAS) opt.numpart[GASTYPE]=ramses_header_info.npartTotal[RAMSESGASTYPE];
-    if (ptype==PSTALL || ptype==PSTSTAR) opt.numpart[STARTYPE]=ramses_header_info.npartTotal[RAMSESSTARTYPE];
-    if (ptype==PSTALL || ptype==PSTBH) opt.numpart[BHTYPE]=ramses_header_info.npartTotal[RAMSESSINKTYPE];
+    if (ptype==PSTALL || ptype==PSTGAS || ptype==PSTALLBARYONS) opt.numpart[GASTYPE]=ramses_header_info.npartTotal[RAMSESGASTYPE];
+    if (ptype==PSTALL || ptype==PSTSTAR || ptype==PSTALLBARYONS) opt.numpart[STARTYPE]=ramses_header_info.npartTotal[RAMSESSTARTYPE];
+    if (ptype==PSTALL || ptype==PSTBH || ptype==PSTALLBARYONS) opt.numpart[BHTYPE]=ramses_header_info.npartTotal[RAMSESSINKTYPE];
     return nbodies;
 
 }
@@ -804,7 +805,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 #endif
 #endif
 
-            if (opt.partsearchtype==PSTALL) {
+            if (opt.partsearchtype==PSTALL || (opt.partsearchtype == PSTALLBARYONS && typeval!=DARKTYPE)) {
 #ifdef USEMPI
                 Pbuf[ibufindex]=Particle(mtemp*mscale,
                     xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
@@ -1041,7 +1042,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     }
 
     //if gas searched in some fashion then load amr/hydro data
-    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
+    if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)||opt.partsearchtype==PSTALLBARYONS) {
 #ifdef USEMPI
     if (ireadtask[ThisTask]>=0) {
     inreadsend=0;
@@ -1171,7 +1172,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
                                         utemp=hydrotempchunk[idim*chunksize*header[i].nvarh+4*chunksize+igrid]/hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]/(header[i].gamma_index-1.0);
                                         rhotemp=hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]*rhoscale;
                                         Ztemp=hydrotempchunk[idim*chunksize*header[i].nvarh+5*chunksize+igrid];
-                                        if (opt.partsearchtype==PSTALL) {
+                                        if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTALLBARYONS) {
 #ifdef USEMPI
                                             Pbuf[ibufindex]=Particle(mtemp*mscale,
                                                 xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,

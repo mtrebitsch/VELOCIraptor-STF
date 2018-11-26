@@ -105,7 +105,7 @@ void ReadTipsy(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particl
         {
             Ftip.read((char*)&gas,sizeof(tipsy_gas_particle));
             gas.SwitchtoBigEndian();
-            if ((opt.partsearchtype==PSTALL||opt.partsearchtype==PSTGAS)&&count==0) {
+            if ((opt.partsearchtype==PSTALL||opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALLBARYONS)&&count==0) {
                 posfirst[0]=gas.pos[0];posfirst[1]=gas.pos[1];posfirst[2]=gas.pos[2];
                 count++;
                 break;
@@ -128,7 +128,7 @@ void ReadTipsy(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particl
         {
             Ftip.read((char*)&star,sizeof(tipsy_star_particle));
             star.SwitchtoBigEndian();
-            if ((opt.partsearchtype==PSTALL||opt.partsearchtype==PSTSTAR)&&count==0) {
+            if ((opt.partsearchtype==PSTALL||opt.partsearchtype==PSTSTAR||opt.partsearchtype==PSTALLBARYONS)&&count==0) {
                 posfirst[0]=star.pos[0];posfirst[1]=star.pos[1];posfirst[2]=star.pos[2];
                 count++;
                 break;
@@ -154,7 +154,7 @@ void ReadTipsy(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particl
                 else if (gas.pos[j]-posfirst[j]<-opt.p/2.0) gas.pos[j]+=opt.p;
             }
         }
-        if (opt.partsearchtype==PSTALL||opt.partsearchtype==PSTGAS) {
+        if (opt.partsearchtype==PSTALL||opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALLBARYONS) {
 #ifndef USEMPI
             Part[count]=Particle(gas.mass*mscale,
                 gas.pos[0]*lscale,gas.pos[1]*lscale,gas.pos[2]*lscale,
@@ -242,7 +242,7 @@ void ReadTipsy(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particl
                 else if (star.pos[j]-posfirst[j]<-opt.p/2.0) star.pos[j]+=opt.p;
             }
         }
-        if (opt.partsearchtype==PSTALL||opt.partsearchtype==PSTSTAR) {
+        if (opt.partsearchtype==PSTALL||opt.partsearchtype==PSTSTAR||opt.partsearchtype==PSTALLBARYONS) {
 #ifndef USEMPI
         Part[count]=Particle(star.mass*mscale,
             star.pos[0]*lscale,star.pos[1]*lscale,star.pos[2]*lscale,

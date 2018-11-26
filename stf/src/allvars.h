@@ -99,6 +99,7 @@ using namespace NBody;
 #define  PSTGAS 4
 #define  PSTBH 5
 #define  PSTNOBH 6
+#define  PSTALLBARYONS 10
 //@}
 
 /// \defgroup STRUCTURETYPES Specific structure type, allow for other types beside HALO
@@ -529,7 +530,7 @@ struct Options
     //Swift::siminfo swiftsiminfo;
 
     double spacedimension[3];
-        
+
     /* Number of top-level cells. */
     int numcells;
 

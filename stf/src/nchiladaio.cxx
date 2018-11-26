@@ -305,6 +305,7 @@ Int_t Nchilada_get_nbodies(char *fname, int ptype, Options &opt)
     else if (opt.partsearchtype==PSTDARK) nbodies=ndark;
     else if (opt.partsearchtype==PSTGAS) nbodies=nsph;
     else if (opt.partsearchtype==PSTSTAR) nbodies=nstar;
+    else if (opt.partsearchtype==PSTALLBARYONS) nbodies=nstar+nsph;
     if (nbodies==0) {
         cout<<"Error. Zero particles of type "<<opt.partsearchtype<<" found. Either 0 nor can't find file"<<filename<<endl;
 #ifdef USEMPI
@@ -373,6 +374,11 @@ void ReadNchilada(Options &opt, vector<Particle> &Part, const Int_t nbodies,Part
     }
     else if (opt.partsearchtype==PSTGAS) {nusetypes=1;usetypes[0]=NCHILADAGASTYPE;}
     else if (opt.partsearchtype==PSTSTAR) {nusetypes=1;usetypes[0]=NCHILADASTARTYPE;}
+    else if (opt.partsearchtype==PSTALLBARONS) {
+        //lets assume there are stars/gas.
+        nusetypes=2;
+        usetypes[0]=NCHILADAGASTYPE;usetypes[1]=NCHILADASTARTYPE;
+    }
 
 
 #ifndef USEMPI

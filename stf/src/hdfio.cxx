@@ -147,6 +147,15 @@ void ReadHDF(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particle 
     else if (opt.partsearchtype==PSTBH) {
         nusetypes=1;usetypes[0]=HDFBHTYPE;
     }
+    else if (opt.partsearchtype==PSTALLBARYONS) {
+        //lets assume there are dm/gas.
+        nusetypes=0;
+        usetypes[nusetypes++]=HDFGASTYPE;
+        if (opt.iusestarparticles) usetypes[nusetypes++]=HDFSTARTYPE;
+        if (opt.iusesinkparticles) usetypes[nusetypes++]=HDFBHTYPE;
+        if (opt.iusewindparticles) usetypes[nusetypes++]=HDFWINDTYPE;
+        if (opt.iusetracerparticles) usetypes[nusetypes++]=HDFTRACERTYPE;
+    }
 
     Int_t i,j,k,n,nchunk,count,bcount,itemp,count2,bcount2;
 
@@ -202,7 +211,7 @@ void ReadHDF(Options &opt, vector<Particle> &Part, const Int_t nbodies,Particle 
     int *irecv, *mpi_irecvflag;
     MPI_Request *mpi_request;
     Int_t *mpi_nsend_baryon;
-    if (opt.iBaryonSearch && opt.partsearchtype!=PSTALL) mpi_nsend_baryon=new Int_t[NProcs*NProcs];
+    if (opt.iBaryonSearch && (opt.partsearchtype!=PSTALL && opt.partsearchtype!=PSTALLBARYONS)) mpi_nsend_baryon=new Int_t[NProcs*NProcs];
     Int_t inreadsend,totreadsend;
     Int_t *mpi_nsend_readthread;
     Int_t *mpi_nsend_readthread_baryon;

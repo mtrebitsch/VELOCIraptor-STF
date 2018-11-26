@@ -50,6 +50,7 @@ Int_t ReadHeader(Options &opt){
         else if (opt.partsearchtype==PSTDARK) return tipsyheader.ndark;
         else if (opt.partsearchtype==PSTGAS) return tipsyheader.nsph;
         else if (opt.partsearchtype==PSTSTAR) return tipsyheader.nstar;
+        else if (opt.partsearchtype==PSTALLBARYONS) return tipsyheader.nstar+tipsyheader.nsph;
     }
     else if (opt.inputtype==IOGADGET) {
         if (opt.partsearchtype==PSTALL) return get_nbodies(opt.fname);
@@ -57,6 +58,7 @@ Int_t ReadHeader(Options &opt){
         else if (opt.partsearchtype==PSTGAS) return get_nbodies(opt.fname,GGASTYPE);
         else if (opt.partsearchtype==PSTSTAR) return get_nbodies(opt.fname,GSTARTYPE);
         else if (opt.partsearchtype==PSTBH) return get_nbodies(opt.fname,GBHTYPE);
+        else if (opt.partsearchtype==PSTALLBARYONS) return get_nbodies(opt.fname,GGASTYPE)+get_nbodies(opt.fname,GSTARTYPE)+get_nbodies(opt.fname,GBHTYPE);
     }
     else if (opt.inputtype==IORAMSES) return RAMSES_get_nbodies(opt.fname,opt.partsearchtype,opt);
 #ifdef USEHDF

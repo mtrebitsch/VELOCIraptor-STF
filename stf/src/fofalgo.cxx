@@ -192,6 +192,12 @@ int FOF3dDM(Particle &a, Particle &b, Double_t *params){
     for (int j=0;j<3;j++) total+=(a.GetPosition(j)-b.GetPosition(j))*(a.GetPosition(j)-b.GetPosition(j))/params[6];
     return (total<1);
 }
+int FOF3dTyped(Particle &a, Particle &b, Double_t *params){
+    if (a.GetType()!=int(params[7])) return 0;
+    Double_t total=0;
+    for (int j=0;j<3;j++) total+=(a.GetPosition(j)-b.GetPosition(j))*(a.GetPosition(j)-b.GetPosition(j))/params[6];
+    return (total<1);
+}
 
 int FOFPositivetypes(Particle &a, Particle &b, Double_t *params){
     return (a.GetType()>=0 && b.GetType()>=0);

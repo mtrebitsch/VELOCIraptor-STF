@@ -21,7 +21,7 @@ int main(int argc,char **argv)
 {
 #ifdef SWIFTINTERFACE
   cout<<"Built with SWIFT interface enabled when running standalone VELOCIraptor. Should only be enabled when running VELOCIraptor as a library from SWIFT. Exiting..."<<endl;
-  exit(0);  
+  exit(0);
 #endif
 #ifdef USEMPI
     //start MPI
@@ -167,7 +167,7 @@ int main(int argc,char **argv)
     //note that for nonmpi particle array is a contiguous block of memory regardless of whether a separate baryon search is required
 #ifndef USEMPI
     Nlocal=nbodies;
-    if (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) {
+    if ((opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) || (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALLBARYONS)) {
         Part.resize(nbodies+nbaryons);
         Pbaryons=&(Part.data()[nbodies]);
         Nlocalbaryon[0]=nbaryons;
@@ -204,7 +204,7 @@ int main(int argc,char **argv)
 #endif
     }
     cout<<ThisTask<<" will also require additional memory for FOF algorithms and substructure search. Largest mem needed for preliminary FOF search. Rough estimate is "<<Nlocal*(sizeof(Int_tree_t)*8)/1024./1024./1024.<<"GB of memory"<<endl;
-    if (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) {
+    if ((opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) || (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALLBARYONS)) {
         Part.resize(Nmemlocal+Nmemlocalbaryon);
         Pbaryons=&(Part.data()[Nlocal]);
         nbaryons=Nlocalbaryon[0];
@@ -223,7 +223,7 @@ int main(int argc,char **argv)
 #ifdef USEMPI
     //if mpi and want separate baryon search then once particles are loaded into contigous block of memory and sorted according to type order,
     //allocate memory for baryons
-    if (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) {
+    if ((opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALL) || (opt.iBaryonSearch>0 && opt.partsearchtype!=PSTALLBARYONS)) {
         Pbaryons=new Particle[Nmemlocalbaryon];
         nbaryons=Nlocalbaryon[0];
 
@@ -401,6 +401,7 @@ int main(int argc,char **argv)
         }
         //if FOF search overall particle types then running sub search over just dm and need to associate baryons to just dm particles must determine number of baryons, sort list, run search, etc
         //but only need to run search if substructure has been searched
+        //note that this search can technically be applied to any particle type, not just dm so can also search star particle based groups for associated gas and bh.
         else if (opt.iSubSearch==1){
             nbaryons=0;
             ndark=0;

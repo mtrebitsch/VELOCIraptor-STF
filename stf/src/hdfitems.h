@@ -562,6 +562,15 @@ inline Int_t HDF_get_nbodies(char *fname, int ptype, Options &opt)
     else if (ptype==PSTGAS) {nusetypes=1;usetypes[0]=HDFGASTYPE;}
     else if (ptype==PSTSTAR) {nusetypes=1;usetypes[0]=HDFSTARTYPE;}
     else if (ptype==PSTBH) {nusetypes=1;usetypes[0]=HDFBHTYPE;}
+	else if (ptype==PSTALLBARYONS) {
+        //lets assume there are dm/gas.
+        nusetypes=0;
+        usetypes[nusetypes++]=HDFGASTYPE;
+        if (opt.iusestarparticles) usetypes[nusetypes++]=HDFSTARTYPE;
+        if (opt.iusesinkparticles) usetypes[nusetypes++]=HDFBHTYPE;
+        if (opt.iusewindparticles) usetypes[nusetypes++]=HDFWINDTYPE;
+        if (opt.iusetracerparticles) usetypes[nusetypes++]=HDFTRACERTYPE;
+    }
     //else if (ptype==PSTNOBH) {nusetypes=3;usetypes[0]=0;usetypes[1]=1;usetypes[2]=4;}
 
     //Try block to detect exceptions raised by any of the calls inside it
