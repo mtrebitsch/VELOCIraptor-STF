@@ -282,7 +282,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
                     if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
-                        for (m=0;m<3;m++) Part[count2].SetPosition(m,LittleFLOAT(ctemp[m]));
+                        for (Int_t m=0;m<3;m++) Part[count2].SetPosition(m,LittleFLOAT(ctemp[m]));
                         count2++;
                     }
                 }
@@ -334,7 +334,7 @@ void ReadGadget(Options &opt, vector<Particle> &Part, const Int_t nbodies,Partic
                 }
                 else if (opt.partsearchtype==PSTALLBARYONS) {
                     if (k==GGASTYPE || k==GSTARTYPE || k==GBHTYPE) {
-                        for (m=0;m<3;m++) Part[count2].SetVelocity(m,LittleFLOAT(ctemp[m]));
+                        for (Int_t m=0;m<3;m++) Part[count2].SetVelocity(m,LittleFLOAT(ctemp[m]));
                         count2++;
                     }
                 }
