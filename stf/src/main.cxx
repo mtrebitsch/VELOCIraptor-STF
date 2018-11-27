@@ -389,7 +389,7 @@ int main(int argc,char **argv)
     pdata=new PropData[ngroup+1];
     //if inclusive halo mass required
     if (opt.iInclusiveHalo && ngroup>0) {
-        CopyMasses(nhalos,pdatahalos,pdata);
+        CopyMasses(opt,nhalos,pdatahalos,pdata);
         delete[] pdatahalos;
     }
 

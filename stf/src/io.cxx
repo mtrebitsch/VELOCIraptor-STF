@@ -1776,6 +1776,60 @@ void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
         itemp++;
         }
 
+        if (opt.iextrahalooutput) {
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJ200m[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJ200c[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJBN98[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            if (opt.iInclusiveHalo>0) {
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gM200m_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gM200c_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gMBN98_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gR200m_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gR200c_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gRBN98_excl;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJ200m_excl[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJ200c_excl[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].gJBN98_excl[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+            }
+        }
+
 #ifdef GASON
         for (Int_t i=0;i<ngroups;i++) ((unsigned long*)data)[i]=pdata[i+1].n_gas;
         propdataset[itemp].write(data,head.predtypeinfo[itemp]);
@@ -1848,6 +1902,61 @@ void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
         propdataset[itemp].write(data,head.predtypeinfo[itemp]);
         itemp++;
 #endif
+    if (opt.iextragasoutput) {
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200mean_gas;
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200crit_gas;
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_BN98_gas;
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+
+        for (int k=0;k<3;k++){
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200mean_gas[k];
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+        }
+        for (int k=0;k<3;k++){
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200crit_gas[k];
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+        }
+        for (int k=0;k<3;k++){
+        for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_BN98_gas[k];
+        propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+        itemp++;
+        }
+
+        if (opt.iInclusiveHalo>0) {
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200mean_excl_gas;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200crit_excl_gas;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_BN98_excl_gas;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200mean_excl_gas[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200crit_excl_gas[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_BN98_excl_gas[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+        }
+    }
 #endif
 
 #ifdef STARON
@@ -1917,6 +2026,61 @@ void WriteProperties(Options &opt, const Int_t ngroups, PropData *pdata){
         for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].Z_star;
         propdataset[itemp].write(data,head.predtypeinfo[itemp]);
         itemp++;
+        if (opt.iextrastaroutput) {
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200mean_star;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200crit_star;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_BN98_star;
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200mean_star[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200crit_star[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+            for (int k=0;k<3;k++){
+            for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_BN98_star[k];
+            propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+            itemp++;
+            }
+
+            if (opt.iInclusiveHalo>0) {
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200mean_excl_star;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_200crit_excl_star;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].M_BN98_excl_star;
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200mean_excl_star[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_200crit_excl_star[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+                for (int k=0;k<3;k++){
+                for (Int_t i=0;i<ngroups;i++) ((Double_t*)data)[i]=pdata[i+1].L_BN98_excl_star[k];
+                propdataset[itemp].write(data,head.predtypeinfo[itemp]);
+                itemp++;
+                }
+            }
+        }
 #endif
 #ifdef BHON
         for (Int_t i=0;i<ngroups;i++) ((unsigned long*)data)[i]=pdata[i+1].n_bh;
