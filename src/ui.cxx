@@ -657,6 +657,9 @@ inline void ConfigCheck(Options &opt)
             exit(8);
 #endif
     }
+    //convert reference apertures
+    opt.lengthtokpc30pow2 /= opt.lengthtokpc*opt.lengthtokpc;
+    opt.lengthtokpc50pow2 /= opt.lengthtokpc*opt.lengthtokpc; 
     if (opt.velocitytokms<=0){
 #ifdef USEMPI
     if (ThisTask==0)
