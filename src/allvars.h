@@ -245,6 +245,14 @@ using namespace NBody;
 #define M_HetoM_H 4.0026
 //@}
 
+/// \defgroup OMPLIMS For determining whether loop contains enough for openm to be worthwhile.
+//@{
+#define ompsearchnum 50000
+#define ompunbindnum 1000
+#define ompperiodnum 50000
+#define omppropnum 50000
+#define ompfofsearchnum 2000000
+//@}
 
 /// Structure stores unbinding information
 struct UnbindInfo
@@ -360,7 +368,7 @@ struct Options
     ///\name length,m,v,grav conversion units
     //@{
     Double_t L, M, U, V, G;
-    Double_t lengthtokpc, velocitytokms, masstosolarmass, timetoseconds;
+    Double_t lengthtokpc, velocitytokms, masstosolarmass, energyperunitmass, timetoseconds;
     //@}
     ///period (comove)
     Double_t p;
@@ -571,10 +579,11 @@ struct Options
         Omega_Lambda = 0.0;
         Omega_b = 0.0;
         Omega_cdm = Omega_m;
+        Omega_k = 0;
         Omega_r = 0.0;
         Omega_nu = 0.0;
         Omega_de = 0.0;
-
+        w_de = -1.0;
         rhobg = 1.0;
         virlevel = -1;
         comove=0;
