@@ -287,6 +287,7 @@ Int_t OpenMPResortParticleandGroups(Int_t nbodies, vector<Particle> &Part, Int_t
 #ifndef USEMPI
     int ThisTask=0,NProcs=1;
 #endif
+    /*
     Int_t start, ngroups=0;
     Int_t *numingroup, **plist;
     //now get number of groups and reorder group ids
@@ -329,10 +330,32 @@ Int_t OpenMPResortParticleandGroups(Int_t nbodies, vector<Particle> &Part, Int_t
     for (auto i=1;i<=ngroups;i++) delete[] plist[i];
     delete[] plist;
     delete[] numingroup;
+    */
+    //trying faster reorder
+    Int_t ngroups=0, oldngroups, gid, i;
+    vector<Int_t> vec(nbodies);
+    for (i=0;i<nbodies;i++) vec[i] = pfof[i];
+    unordered_set<Int_t> s( vec.begin(), vec.end() );
+    ngroups=s.size();
+    vec.assign( s.begin(), s.end() );
+    unordered_map<Int_t, int> m;
+    for (i=0;i<ngroups;i++) m[vec[i]]=0;
+    for (i=0;i<nbodies;i++) m[pfof[i]] = m[pfof[i]]+1;
+    oldngroups=ngroups;
+    for (i=0;i<oldngroups;i++) if (m[vec[i]] < minsize) {m[vec[i]] = 0; ngroups--;}
+    PriorityQueue *pq = new PriorityQueue(oldngroups);
+    for (i=0;i<oldngroups;i++) pq->Push(vec[i],m[vec[i]]);
+    for (i=0;i<oldngroups;i++) {
+        gid=pq->TopQueue();
+        m[gid] = i+1;
+        pq->Pop();
+    }
+    for (i=0;i<nbodies;i++) pfof[i] = m[pfof[i]];
     return ngroups;
 }
 
 void OpenMPHeadNextUpdate(const Int_t nbodies, vector<Particle> &Part, const Int_t numgroups, Int_t *&pfof, Int_tree_t *&Head, Int_tree_t *&Next){
+    /*
     Int_t *numingroup;
     Int_t **pglist;
     numingroup=BuildNumInGroup(nbodies, numgroups, pfof);
@@ -348,6 +371,26 @@ void OpenMPHeadNextUpdate(const Int_t nbodies, vector<Particle> &Part, const Int
     for (auto i=1;i<=numgroups;i++) delete[] pglist[i];
     delete[] numingroup;
     delete[] pglist;
+    */
+    Int_t gid;
+    vector<Int_tree_t> curhead;
+    vector<Int_tree_t> curnext;
+    curhead.resize(numgroups);
+    curnext.resize(numgroups);
+    for (auto i=0;i<numgroups;i++) curhead[i]=curnext[i]=-1;
+    for (auto i=0;i<nbodies;i++) {
+        gid=pfof[Part[i].GetID()];
+        if (gid==0) continue;
+        if (curhead[gid-1]==-1) {
+            curhead[gid-1]=i;
+            curnext[gid-1]=i;
+        }
+        else {
+            Head[i]=curhead[gid-1];
+            Next[i]=curnext[gid-1];
+            curnext[gid-1]=i;
+        }
+    }
 }
 
 //@}

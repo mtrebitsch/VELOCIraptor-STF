@@ -25,6 +25,9 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <getopt.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
