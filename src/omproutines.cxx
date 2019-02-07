@@ -287,50 +287,6 @@ Int_t OpenMPResortParticleandGroups(Int_t nbodies, vector<Particle> &Part, Int_t
 #ifndef USEMPI
     int ThisTask=0,NProcs=1;
 #endif
-    /*
-    Int_t start, ngroups=0;
-    Int_t *numingroup, **plist;
-    //now get number of groups and reorder group ids
-    for (auto i=0;i<nbodies;i++) Part[i].SetID(-pfof[i]);
-    //used to use ID store store group id info
-    qsort(Part.data(),nbodies,sizeof(Particle),IDCompare);
-
-    //determine the # of groups, their size and the current group ID
-    for (auto i=0,start=0;i<nbodies;i++) {
-        if (Part[i].GetID()!=Part[start].GetID()) {
-            //if group is too small set type to zero, which currently is used to store the group id
-            if ((i-start)<minsize) for (Int_t j=start;j<i;j++) Part[j].SetID(0);
-            else ngroups++;
-            start=i;
-        }
-        if (Part[i].GetID()==0) break;
-    }
-    //again resort to move untagged particles to the end.
-    qsort(Part.data(),nbodies,sizeof(Particle),IDCompare);
-
-    //now adjust pfof and ids.
-    for (auto i=0;i<nbodies;i++) {pfof[i]=-Part[i].GetID();Part[i].SetID(i);}
-    numingroup=new Int_t[ngroups+1];
-    plist=new Int_t*[ngroups+1];
-    ngroups=1;//offset as group zero is untagged
-    for (auto i=0,start=0;i<nbodies;i++) {
-        if (pfof[i]!=pfof[start]) {
-            numingroup[ngroups]=i-start;
-            plist[ngroups]=new Int_t[numingroup[ngroups]];
-            for (auto j=start,count=0;j<i;j++) plist[ngroups][count++]=j;
-            ngroups++;
-            start=i;
-        }
-        if (pfof[i]==0) break;
-    }
-    ngroups--;
-
-    //reorder groups ids according to size
-    ReorderGroupIDs(ngroups,ngroups,numingroup,pfof,plist);
-    for (auto i=1;i<=ngroups;i++) delete[] plist[i];
-    delete[] plist;
-    delete[] numingroup;
-    */
     //trying faster reorder
     Int_t ngroups=0, oldngroups, gid, i;
     vector<Int_t> vec(nbodies);
@@ -340,43 +296,31 @@ Int_t OpenMPResortParticleandGroups(Int_t nbodies, vector<Particle> &Part, Int_t
     vec.assign( s.begin(), s.end() );
     unordered_map<Int_t, int> m;
     for (i=0;i<ngroups;i++) m[vec[i]]=0;
-    for (i=0;i<nbodies;i++) m[pfof[i]] = m[pfof[i]]+1;
+    for (i=0;i<nbodies;i++) if (pfof[i] >0) m[pfof[i]] = m[pfof[i]]+1;
     oldngroups=ngroups;
     for (i=0;i<oldngroups;i++) if (m[vec[i]] < minsize) {m[vec[i]] = 0; ngroups--;}
     PriorityQueue *pq = new PriorityQueue(oldngroups);
     for (i=0;i<oldngroups;i++) pq->Push(vec[i],m[vec[i]]);
     for (i=0;i<oldngroups;i++) {
         gid=pq->TopQueue();
-        m[gid] = i+1;
+        if (i<ngroups) m[gid] = i+1;
         pq->Pop();
     }
+    delete pq;
     for (i=0;i<nbodies;i++) pfof[i] = m[pfof[i]];
     return ngroups;
 }
 
 void OpenMPHeadNextUpdate(const Int_t nbodies, vector<Particle> &Part, const Int_t numgroups, Int_t *&pfof, Int_tree_t *&Head, Int_tree_t *&Next){
-    /*
-    Int_t *numingroup;
-    Int_t **pglist;
-    numingroup=BuildNumInGroup(nbodies, numgroups, pfof);
-    pglist=BuildPGList(nbodies, numgroups, numingroup, pfof, Part.data());
-    for (auto i=0;i<nbodies;i++) {
-        Head[i]=i;
-        Next[i]=-1;
-    }
-    for (auto i=1;i<=numgroups;i++) {
-        for (auto j=1;j<numingroup[i];j++) Head[pglist[i][j]]=pglist[i][0];
-        for (auto j=0;j<numingroup[i]-1;j++) Next[pglist[i][j]]=pglist[i][j+1];
-    }
-    for (auto i=1;i<=numgroups;i++) delete[] pglist[i];
-    delete[] numingroup;
-    delete[] pglist;
-    */
     Int_t gid;
     vector<Int_tree_t> curhead;
     vector<Int_tree_t> curnext;
     curhead.resize(numgroups);
     curnext.resize(numgroups);
+    for (auto i=0;i<nbodies;i++) {
+        Head[i]=i;
+        Next[i]=-1;
+    }
     for (auto i=0;i<numgroups;i++) curhead[i]=curnext[i]=-1;
     for (auto i=0;i<nbodies;i++) {
         gid=pfof[Part[i].GetID()];
