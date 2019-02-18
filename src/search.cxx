@@ -80,12 +80,12 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
 #ifdef USEOPENMP
     //if using openmp produce tree with large buckets as a decomposition of the local mpi domain
     //to then run local fof searches on each domain before stitching
-    int numompregions = ceil(nbodies/(float)ompfofsearchnum);
-    if (numompregions >= 4 && nthreads > 1) {
+    int numompregions = ceil(nbodies/(float)opt.openmpfofsize);
+    if (numompregions >= 4 && nthreads > 1 && opt.iopenmpfof == 1) {
         time3=MyGetTime();
         Double_t rdist = sqrt(param[1]);
         //determine the omp regions;
-        tree = new KDTree(Part.data(),nbodies,ompfofsearchnum,tree->TPHYS,tree->KEPAN,100);
+        tree = new KDTree(Part.data(),nbodies,opt.openmpfofsize,tree->TPHYS,tree->KEPAN,100);
         numompregions=tree->GetNumLeafNodes();
         ompdomain = OpenMPBuildDomains(opt, numompregions, tree, rdist);
         storeorgIndex = new Int_t[nbodies];
@@ -122,7 +122,7 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
     //if enough regions then search each individually
     //then link across omp domains
     Int_t ompminsize = 2;
-    if (numompregions>=4 && nthreads > 1){
+    if (numompregions>=4 && nthreads > 1 && opt.iopenmpfof == 1){
         time3=MyGetTime();
         Int_t orgIndex, omp_import_total;
         int omptask;
@@ -190,8 +190,13 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
         //and reallocate tree if required (that is only if not using MPI but searching for substructure
 #if !defined(USEMPI) && defined(STRUCDEN)
         if (numgroups>0 && (opt.iSubSearch==1&&opt.foftype!=FOF6DCORE))
-            tree = new KDTree(Part.data(),nbodies,opt.Bsize,tree->TPHYS,tree->KEPAN,1000,0,0,0,period);
 #endif
+        tree = new KDTree(Part.data(),nbodies,opt.Bsize,tree->TPHYS,tree->KEPAN,1000,0,0,0,period);
+        //if running MPI then need to pudate the head, next info
+#ifdef USEMPI
+        OpenMPHeadNextUpdate(nbodies, Part, numgroups, pfof, Head, Next);
+#endif
+
     }
     else {
         //posible alteration for all particle search
@@ -345,7 +350,7 @@ Int_t* SearchFullSet(Options &opt, const Int_t nbodies, vector<Particle> &Part, 
 #endif
     if (opt.iverbose>=2) {
         Int_t sum=0;
-        for (i=0;i<nbodies;i++) sum+=(pfof[i]>0);
+        for (i=0;i<Nlocal;i++) sum+=(pfof[i]>0);
         cout<<ThisTask<<" has found after full search "<<numgroups<<" with lower min size of "<<minsize<<", with  "<<sum<<" particles in all groups"<<endl;
     }
     if (ThisTask==0) cout<<"Total number of groups found is "<<totalgroups<<endl;
