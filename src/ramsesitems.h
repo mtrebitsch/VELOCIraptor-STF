@@ -96,6 +96,7 @@ int RAMSES_fortran_read(fstream &, RAMSESFLOAT &);
 int RAMSES_fortran_read(fstream &, int*);
 int RAMSES_fortran_read(fstream &, RAMSESFLOAT *);
 int RAMSES_fortran_read(fstream &, RAMSESIDTYPE *);
+int RAMSES_fortran_read(fstream &, char *);
 int RAMSES_fortran_skip(fstream &, int nskips=1);
 
 /// \name Get the number of particles in the ramses files
