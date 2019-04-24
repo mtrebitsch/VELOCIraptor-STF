@@ -421,7 +421,7 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
 		    // This is a star particle
 		    // MT: not sure that the following is relevant
 		    // Indeed, for a non-cosmo run, we might have stars with age 0...
-                    if (dummy_age[j] != 0)
+                    if (dummy_age[j] != 0.0)
 			ramses_header_info.npart[RAMSESSTARTYPE]++;
 		    else
 			ghoststars++;
@@ -812,7 +812,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
         RAMSES_fortran_read(Fpartid[i],idvalchunk);
         for (int nn=0;nn<nchunk;nn++)
         {
-            //if (fabs((mtempchunk[nn]-dmp_mass)/dmp_mass) > 1e-5 && (agetempchunk[nn] == 0.0))
 	    if ((typechunk[nn] != 1) && (agetempchunk[nn] == 0.0))
             {
 		//  GHOST PARTICLE!!!
