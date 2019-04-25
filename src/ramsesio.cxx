@@ -379,8 +379,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     fstream Finfo;
     fstream *Famr;
     fstream *Fhydro;
-    fstream *Fpart, *Fpartvel,*Fpartid,*Fpartmass, *Fpartlevel, *Fpartage, *Fpartmet;
-    fstream *Fparttype;
+    fstream *Fpart;
     RAMSES_Header *header;
     int intbuff[NRAMSESTYPE];
     long long longbuff[NRAMSESTYPE];
@@ -424,13 +423,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     Famr       = new fstream[opt.num_files];
     Fhydro     = new fstream[opt.num_files];
     Fpart      = new fstream[opt.num_files];
-    Fpartvel   = new fstream[opt.num_files];
-    Fpartmass  = new fstream[opt.num_files];
-    Fpartid    = new fstream[opt.num_files];
-    Fpartlevel = new fstream[opt.num_files];
-    Fparttype   = new fstream[opt.num_files];
-    Fpartage   = new fstream[opt.num_files];
-    Fpartmet   = new fstream[opt.num_files];
     header     = new RAMSES_Header[opt.num_files];
 
     Particle *Pbuf;
@@ -609,362 +601,306 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     count2=bcount2=0;
     if (opt.partsearchtype!=PSTGAS) {
 #ifdef USEMPI
-    if (ireadtask[ThisTask]>=0) {
-        inreadsend=0;
+	if (ireadtask[ThisTask]>=0) {
+	    inreadsend=0;
 #endif
-    //read particle files consists of positions,velocities, mass, id, and level (along with ages and met if some flags set)
-    for (i=0;i<opt.num_files;i++) {
-    if (ireadfile[i]) {
-        sprintf(buf1,"%s/part_%s.out%05d",opt.fname,opt.ramsessnapname,i+1);
-        sprintf(buf2,"%s/part_%s.out",opt.fname,opt.ramsessnapname);
-        if (FileExists(buf1)) sprintf(buf,"%s",buf1);
-        else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
-        Fpart[i].open(buf, ios::binary|ios::in);
-        Fpartvel[i].open(buf, ios::binary|ios::in);
-        Fpartmass[i].open(buf, ios::binary|ios::in);
-        Fpartid[i].open(buf, ios::binary|ios::in);
-        Fpartlevel[i].open(buf, ios::binary|ios::in);
-        Fparttype[i].open(buf, ios::binary|ios::in);
-        Fpartage[i].open(buf, ios::binary|ios::in);
-        Fpartmet[i].open(buf, ios::binary|ios::in);
 
-        //skip header information in each file save for number in the file
-        //@{
-        byteoffset=0;
-        // ncpus
-        byteoffset+=RAMSES_fortran_skip(Fpart[i]);
-        // ndims
-        byteoffset+=RAMSES_fortran_skip(Fpart[i]);
-        // store number of particles locally in file
-        byteoffset+=RAMSES_fortran_read(Fpart[i],header[i].npartlocal);
-        // skip local seeds, nstartot, mstartot, mstarlost, nsink
-        byteoffset+=RAMSES_fortran_skip(Fpart[i],5);
+	// List existing particle fields from part_file_descriptor.txt
+	vector< array<string, 2> > partfields;
+	sprintf(buf1,"%s/part_file_descriptor.txt", opt.fname);
+	partfields = RAMSES_read_descriptor(buf1);
 
-        //byteoffset now stores size of header offset for particles
-        Fpartvel[i].seekg(byteoffset,ios::cur);
-        Fpartmass[i].seekg(byteoffset,ios::cur);
-        Fpartid[i].seekg(byteoffset,ios::cur);
-        Fpartlevel[i].seekg(byteoffset,ios::cur);
-        Fparttype[i].seekg(byteoffset,ios::cur);
-        Fpartage[i].seekg(byteoffset,ios::cur);
-        Fpartmet[i].seekg(byteoffset,ios::cur);
-        //skip positions
-        for(idim=0;idim<header[ifirstfile].ndim;idim++)
-        {
-            RAMSES_fortran_skip(Fpartvel[i]);
-            RAMSES_fortran_skip(Fpartmass[i]);
-            RAMSES_fortran_skip(Fpartid[i]);
-            RAMSES_fortran_skip(Fpartlevel[i]);
-            RAMSES_fortran_skip(Fparttype[i]);
-            RAMSES_fortran_skip(Fpartage[i]);
-            RAMSES_fortran_skip(Fpartmet[i]);
-        }
-        //skip velocities
-        for(idim=0;idim<header[ifirstfile].ndim;idim++)
-        {
-            RAMSES_fortran_skip(Fpartmass[i]);
-            RAMSES_fortran_skip(Fpartid[i]);
-            RAMSES_fortran_skip(Fpartlevel[i]);
-            RAMSES_fortran_skip(Fparttype[i]);
-            RAMSES_fortran_skip(Fpartage[i]);
-            RAMSES_fortran_skip(Fpartmet[i]);
-        }
-        //skip mass
-        RAMSES_fortran_skip(Fpartid[i]);
-        RAMSES_fortran_skip(Fpartlevel[i]);
-        RAMSES_fortran_skip(Fparttype[i]);
-        RAMSES_fortran_skip(Fpartage[i]);
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //skip ids;
-        RAMSES_fortran_skip(Fpartlevel[i]);
-        RAMSES_fortran_skip(Fparttype[i]);
-        RAMSES_fortran_skip(Fpartage[i]);
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //skip levels
-        RAMSES_fortran_skip(Fparttype[i]);
-        RAMSES_fortran_skip(Fpartage[i]);
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //skip type
-        RAMSES_fortran_skip(Fpartage[i]);
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //skip tag
-        RAMSES_fortran_skip(Fpartage[i]);
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //END family
-        //skip ages
-        RAMSES_fortran_skip(Fpartmet[i]);
-        //@}
+	//read particle files consists of positions,velocities, mass, id, and level (along with ages and met if some flags set)
+	for (i=0;i<opt.num_files;i++) {
+	    if (ireadfile[i]) {
+		sprintf(buf1,"%s/part_%s.out%05d",opt.fname,opt.ramsessnapname,i+1);
+		sprintf(buf2,"%s/part_%s.out",opt.fname,opt.ramsessnapname);
+		if (FileExists(buf1)) sprintf(buf,"%s",buf1);
+		else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
+		Fpart[i].open(buf, ios::binary|ios::in);
+		
+		//skip header information in each file save for number in the file
+		// //@{
+		byteoffset=0;
+		// ncpus
+		byteoffset+=RAMSES_fortran_skip(Fpart[i]);
+		// ndims
+		byteoffset+=RAMSES_fortran_skip(Fpart[i]);
+		// store number of particles locally in file
+		byteoffset+=RAMSES_fortran_read(Fpart[i],header[i].npartlocal);
+		// skip local seeds, nstartot, mstartot, mstarlost, nsink
+		byteoffset+=RAMSES_fortran_skip(Fpart[i],5);
+		//byteoffset now stores size of header offset for particles
 
-        //data loaded into memory in chunks
-        chunksize    = nchunk = header[i].npartlocal;
-        ninputoffset = 0;
-        xtempchunk   = new RAMSESFLOAT  [3*chunksize];
-        vtempchunk   = new RAMSESFLOAT  [3*chunksize];
-        mtempchunk   = new RAMSESFLOAT  [chunksize];
-        idvalchunk   = new RAMSESIDTYPE [chunksize];
-        levelchunk   = new RAMSESIDTYPE [chunksize];
-        typechunk    = new char [chunksize];
-        agetempchunk = new RAMSESFLOAT  [chunksize];
-        mettempchunk = new RAMSESFLOAT  [chunksize];
+		//data loaded into memory in chunks
+		chunksize    = nchunk = header[i].npartlocal;
+		ninputoffset = 0;
+		xtempchunk   = new RAMSESFLOAT  [3*chunksize];
+		vtempchunk   = new RAMSESFLOAT  [3*chunksize];
+		mtempchunk   = new RAMSESFLOAT  [chunksize];
+		idvalchunk   = new RAMSESIDTYPE [chunksize];
+		levelchunk   = new RAMSESIDTYPE [chunksize];
+		typechunk    = new char         [chunksize];
+		agetempchunk = new RAMSESFLOAT  [chunksize];
+		mettempchunk = new RAMSESFLOAT  [chunksize];
 
-        for(idim=0;idim<header[ifirstfile].ndim;idim++)
-        {
-            RAMSES_fortran_read(Fpart[i],&xtempchunk[idim*nchunk]);
-            RAMSES_fortran_read(Fpartvel[i],&vtempchunk[idim*nchunk]);
-        }
-        RAMSES_fortran_read(Fpartmass[i],  mtempchunk);
-        RAMSES_fortran_read(Fpartid[i],    idvalchunk);
-        RAMSES_fortran_read(Fpartlevel[i], levelchunk);
-        RAMSES_fortran_read(Fparttype[i],  typechunk);
-        RAMSES_fortran_read(Fpartage[i],   agetempchunk);
-        RAMSES_fortran_read(Fpartmet[i],   mettempchunk);
 
-        RAMSES_fortran_read(Fpartid[i],idvalchunk);
-        for (int nn=0;nn<nchunk;nn++)
-        {
-	    if ((typechunk[nn] != 1) && (agetempchunk[nn] == 0.0))
-            {
-		//  GHOST PARTICLE!!!
-		// this is not a DM particle, and yet it has age == 0.
-		// MT: this could be a cloud particle (which should have type == 3)
-		// MT: FIXME BH
-            }
-            else
-            {
-                xtemp[0] = xtempchunk[nn];
-                xtemp[1] = xtempchunk[nn+nchunk];
-                xtemp[2] = xtempchunk[nn+2*nchunk];
+		for (j=0;j<partfields.size();++j)
+		{
+		    // The order should not be important, since we skip the fields we do not read
+		    if      (partfields[j][0] == "position_x")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[0*nchunk]);}
+		    else if (partfields[j][0] == "position_y")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[1*nchunk]);}
+		    else if (partfields[j][0] == "position_z")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[2*nchunk]);}
+		    else if (partfields[j][0] == "velocity_x")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[0*nchunk]);}
+		    else if (partfields[j][0] == "velocity_y")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[1*nchunk]);}
+		    else if (partfields[j][0] == "velocity_z")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[2*nchunk]);}
+		    else if (partfields[j][0] == "mass")        {RAMSES_fortran_read(Fpart[i],mtempchunk)           ;}
+		    else if (partfields[j][0] == "identity")    {RAMSES_fortran_read(Fpart[i],idvalchunk)           ;}
+		    else if (partfields[j][0] == "levelp")      {RAMSES_fortran_read(Fpart[i],levelchunk)           ;}
+		    else if (partfields[j][0] == "family")      {RAMSES_fortran_read(Fpart[i],typechunk)            ;}
+		    else if (partfields[j][0] == "birth_time")  {RAMSES_fortran_read(Fpart[i],agetempchunk)         ;}
+		    else if (partfields[j][0] == "metallicity") {RAMSES_fortran_read(Fpart[i],mettempchunk)         ;}
+		    else {RAMSES_fortran_skip(Fpart[i]);}
+		}
 
-                vtemp[0] = vtempchunk[nn];
-                vtemp[1] = vtempchunk[nn+nchunk];
-                vtemp[2] = vtempchunk[nn+2*nchunk];
+		// Finally create particle
+		for (int nn=0;nn<nchunk;nn++)
+		{
+		    if ((typechunk[nn] != 1) && (agetempchunk[nn] == 0.0))
+		    {
+			//  GHOST PARTICLE!!!
+			// this is not a DM particle, and yet it has age == 0.
+			// MT: this could be a cloud particle (which should? have type == 3)
+			// MT: FIXME BH
+		    }
+		    else
+		    {
+			xtemp[0] = xtempchunk[nn];
+			xtemp[1] = xtempchunk[nn+nchunk];
+			xtemp[2] = xtempchunk[nn+2*nchunk];
 
-                idval = idvalchunk[nn];
+			vtemp[0] = vtempchunk[nn];
+			vtemp[1] = vtempchunk[nn+nchunk];
+			vtemp[2] = vtempchunk[nn+2*nchunk];
 
-                ///Need to check this for correct 'endianness'
+			idval = idvalchunk[nn];
+
+			///Need to check this for correct 'endianness'
 //             for (int kk=0;kk<3;kk++) {xtemp[kk]=LittleRAMSESFLOAT(xtemp[kk]);vtemp[kk]=LittleRAMSESFLOAT(vtemp[kk]);}
 #ifndef NOMASS
-		mtemp=mtempchunk[nn];
+			mtemp=mtempchunk[nn];
 #else
-		mtemp=1.0;
+			mtemp=1.0;
 #endif
-		ageval = agetempchunk[nn];
-		if (typechunk[nn] == 1) typeval = DARKTYPE;
-		else if (typechunk[nn] == 2) typeval = STARTYPE;
-		else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
+			ageval = agetempchunk[nn];
+			if (typechunk[nn] == 1) typeval = DARKTYPE;
+			else if (typechunk[nn] == 2) typeval = STARTYPE;
+			else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
 		
 #ifdef USEMPI
-		//determine processor this particle belongs on based on its spatial position
-		ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
-		ibufindex=ibuf*BufSize+Nbuf[ibuf];
+			//determine processor this particle belongs on based on its spatial position
+			ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
+			ibufindex=ibuf*BufSize+Nbuf[ibuf];
 #endif
-		//reset hydro quantities of buffer
+			//reset hydro quantities of buffer
 #ifdef USEMPI
 #ifdef GASON
-		Pbuf[ibufindex].SetU(0);
+			Pbuf[ibufindex].SetU(0);
 #ifdef STARON
-		Pbuf[ibufindex].SetSFR(0);
-		Pbuf[ibufindex].SetZmet(0);
+			Pbuf[ibufindex].SetSFR(0);
+			Pbuf[ibufindex].SetZmet(0);
 #endif
 #endif
 #ifdef STARON
-		Pbuf[ibufindex].SetZmet(0);
-		Pbuf[ibufindex].SetTage(0);
+			Pbuf[ibufindex].SetZmet(0);
+			Pbuf[ibufindex].SetTage(0);
 #endif
 #ifdef BHON
 #endif
 #endif
 		
-		if (opt.partsearchtype==PSTALL) {
+			if (opt.partsearchtype==PSTALL) {
 #ifdef USEMPI
-		    Pbuf[ibufindex]=Particle(mtemp*mscale,
-					     xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-					     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-					     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-					     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-					     count2,typeval);
-		    Pbuf[ibufindex].SetPID(idval);
+			    Pbuf[ibufindex]=Particle(mtemp*mscale,xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						     count2,typeval);
+			    Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-		    if (opt.iextendedoutput)
-		    {
-			Part[ibufindex].SetInputFileID(i);
-			Part[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-		    }
+			    if (opt.iextendedoutput)
+			    {
+				Part[ibufindex].SetInputFileID(i);
+				Part[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+			    }
 #endif
-		    Nbuf[ibuf]++;
-		    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+			    Nbuf[ibuf]++;
+			    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-		    Part[count2]=Particle(mtemp*mscale,
-					  xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-					  vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-					  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-					  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-					  count2,typeval);
-		    Part[count2].SetPID(idval);
+			    Part[count2]=Particle(mtemp*mscale,
+						  xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						  vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						  count2,typeval);
+			    Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-		    if (opt.iextendedoutput)
-		    {
-			Part[count2].SetInputFileID(i);
-			Part[count2].SetInputIndexInFile(nn+ninputoffset);
-		    }
+			    if (opt.iextendedoutput)
+			    {
+				Part[count2].SetInputFileID(i);
+				Part[count2].SetInputIndexInFile(nn+ninputoffset);
+			    }
 #endif
 #endif
-		    count2++;
-		}
-		else if (opt.partsearchtype==PSTDARK) {
-		    if (!(typeval==STARTYPE||typeval==BHTYPE)) {
+			    count2++;
+			}
+			else if (opt.partsearchtype==PSTDARK) {
+			    if (!(typeval==STARTYPE||typeval==BHTYPE)){
 #ifdef USEMPI
-			Pbuf[ibufindex]=Particle(mtemp*mscale,
-						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-						 count2,DARKTYPE);
-			Pbuf[ibufindex].SetPID(idval);
+			        Pbuf[ibufindex]=Particle(mtemp*mscale,
+				                         xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+				                         vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+				                         vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+				                         vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+				                         count2,DARKTYPE);
+				Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Pbuf[ibufindex].SetInputFileID(i);
-			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-			}
+				if (opt.iextendedoutput)
+				{
+				    Pbuf[ibufindex].SetInputFileID(i);
+				    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+				}
 #endif
-			//ensure that store number of particles to be sent to other reading threads
-			Nbuf[ibuf]++;
-			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+				//ensure that store number of particles to be sent to other reading threads
+				Nbuf[ibuf]++;
+				MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-			Part[count2]=Particle(mtemp*mscale,
-					      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-					      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-					      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-					      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-					      count2,typeval);
-			Part[count2].SetPID(idval);
+				Part[count2]=Particle(mtemp*mscale,
+						      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						      count2,typeval);
+				Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Part[count2].SetInputFileID(i);
-			    Part[count2].SetInputIndexInFile(nn+ninputoffset);
-			}
+				if (opt.iextendedoutput)
+				{
+				    Part[count2].SetInputFileID(i);
+				    Part[count2].SetInputIndexInFile(nn+ninputoffset);
+				}
 #endif
 #endif
-			count2++;
-		    }
-		    else if (opt.iBaryonSearch) {
+				count2++;
+			    }
+			    else if (opt.iBaryonSearch) {
 #ifdef USEMPI
-			Pbuf[ibufindex]=Particle(mtemp*mscale,
-						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-						 count2);
-			Pbuf[ibufindex].SetPID(idval);
+				Pbuf[ibufindex]=Particle(mtemp*mscale,
+							 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+							 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+							 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+							 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+							 count2);
+				Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Pbuf[ibufindex].SetInputFileID(i);
-			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-			}
+				if (opt.iextendedoutput)
+				{
+				    Pbuf[ibufindex].SetInputFileID(i);
+				    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+				}
 #endif
-			if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
-			else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
-			//ensure that store number of particles to be sent to the reading threads
-			Nbuf[ibuf]++;
-			if (ibuf==ThisTask) {
-			    if (k==RAMSESSTARTYPE) Nlocalbaryon[2]++;
-			    else if (k==RAMSESSINKTYPE) Nlocalbaryon[3]++;
-			}
-			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
+				if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
+				else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
+				//ensure that store number of particles to be sent to the reading threads
+				Nbuf[ibuf]++;
+				if (ibuf==ThisTask) {
+				    if (k==RAMSESSTARTYPE) Nlocalbaryon[2]++;
+				    else if (k==RAMSESSINKTYPE) Nlocalbaryon[3]++;
+				}
+				MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
 #else
-			Pbaryons[bcount2]=Particle(mtemp*mscale,
-						   xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-						   vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-						   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-						   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-						   count2,typeval);
-			Pbaryons[bcount2].SetPID(idval);
+				Pbaryons[bcount2]=Particle(mtemp*mscale,
+							   xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+							   vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+							   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+							   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+							   count2,typeval);
+				Pbaryons[bcount2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Part[bcount2].SetInputFileID(i);
-			    Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+				if (opt.iextendedoutput)
+				{
+				    Part[bcount2].SetInputFileID(i);
+				    Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+				}
+#endif
+#endif
+				bcount2++;
+			    }
 			}
-#endif
-#endif
-			bcount2++;
-		    }
-		}
-		else if (opt.partsearchtype==PSTSTAR) {
-		    if (typeval==STARTYPE) {
+			else if (opt.partsearchtype==PSTSTAR) {
+			    if (typeval==STARTYPE) {
 #ifdef USEMPI
-			//if using MPI, determine proccessor and place in ibuf, store particle in particle buffer and if buffer full, broadcast data
-			//unless ibuf is 0, then just store locally
-			Pbuf[ibufindex]=Particle(mtemp*mscale,
-						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-						 count2,STARTYPE);
-			//ensure that store number of particles to be sent to the reading threads
-			Pbuf[ibufindex].SetPID(idval);
+				//if using MPI, determine proccessor and place in ibuf, store particle in particle buffer and if buffer full, broadcast data
+				//unless ibuf is 0, then just store locally
+				Pbuf[ibufindex]=Particle(mtemp*mscale,
+							 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+							 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+							 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+							 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+							 count2,STARTYPE);
+				//ensure that store number of particles to be sent to the reading threads
+				Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Pbuf[ibufindex].SetInputFileID(i);
-			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-			}
+				if (opt.iextendedoutput)
+				{
+				    Pbuf[ibufindex].SetInputFileID(i);
+				    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+				}
 #endif
-			Nbuf[ibuf]++;
-			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+				Nbuf[ibuf]++;
+				MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-			Part[count2]=Particle(mtemp*mscale,
-					      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-					      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-					      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-					      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-					      count2,typeval);
-			Part[count2].SetPID(idval);
+				Part[count2]=Particle(mtemp*mscale,
+						      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						      count2,typeval);
+				Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-			if (opt.iextendedoutput)
-			{
-			    Part[count2].SetInputFileID(i);
-			    Part[count2].SetInputIndexInFile(nn+ninputoffset);
+				if (opt.iextendedoutput)
+				{
+				    Part[count2].SetInputFileID(i);
+				    Part[count2].SetInputIndexInFile(nn+ninputoffset);
+				}
+#endif
+#endif
+				count2++;
+			    }
 			}
-#endif
-#endif
-			count2++;
-		    }
-		}
-	    }//end of ghost particle check
-        }//end of loop over chunk
+		    }//end of ghost particle check
+		}//end of loop over chunk
 	
-        delete[] xtempchunk;
-        delete[] vtempchunk;
-        delete[] mtempchunk;
-        delete[] idvalchunk;
-        delete[] typechunk;
-        delete[] agetempchunk;
-        delete[] levelchunk;
-        delete[] mettempchunk;
-        Fpart[i].close();
-        Fpartvel[i].close();
-        Fpartmass[i].close();
-        Fpartid[i].close();
-        Fpartlevel[i].close();
-        Fparttype[i].close();
-        Fpartage[i].close();
-        Fpartmet[i].close();
+		delete[] xtempchunk;
+		delete[] vtempchunk;
+		delete[] mtempchunk;
+		delete[] idvalchunk;
+		delete[] typechunk;
+		delete[] agetempchunk;
+		delete[] levelchunk;
+		delete[] mettempchunk;
+		Fpart[i].close();
 #ifdef USEMPI
 
-        //send information between read threads
-        if (opt.nsnapread>1&&inreadsend<totreadsend){
-            MPI_Allgather(Nreadbuf, opt.nsnapread, MPI_Int_t, mpi_nsend_readthread, opt.nsnapread, MPI_Int_t, mpi_comm_read);
-            MPISendParticlesBetweenReadThreads(opt, Preadbuf, Part.data(), ireadtask, readtaskID, Pbaryons, mpi_comm_read, mpi_nsend_readthread, mpi_nsend_readthread_baryon);
-            inreadsend++;
-            for(ibuf = 0; ibuf < opt.nsnapread; ibuf++) Nreadbuf[ibuf]=0;
-        }
+		//send information between read threads
+		if (opt.nsnapread>1&&inreadsend<totreadsend){
+		    MPI_Allgather(Nreadbuf, opt.nsnapread, MPI_Int_t, mpi_nsend_readthread, opt.nsnapread, MPI_Int_t, mpi_comm_read);
+		    MPISendParticlesBetweenReadThreads(opt, Preadbuf, Part.data(), ireadtask, readtaskID, Pbaryons, mpi_comm_read, mpi_nsend_readthread, mpi_nsend_readthread_baryon);
+		    inreadsend++;
+		    for(ibuf = 0; ibuf < opt.nsnapread; ibuf++) Nreadbuf[ibuf]=0;
+		}
 #endif
-    }//end of whether reading a file
-    }//end of loop over file
+	    }//end of whether reading a file
+	}//end of loop over file
 #ifdef USEMPI
     //once finished reading the file if there are any particles left in the buffer broadcast them
     for(ibuf = 0; ibuf < NProcs; ibuf++) if (ireadtask[ibuf]<0)
