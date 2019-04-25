@@ -208,17 +208,13 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     */
 
     // Number of files
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.num_files, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.num_files);
     opt.num_files=ramses_header_info.num_files;
 
     // Number of dimensions
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.ndim, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.ndim);
 
-    //
+    // Number of coarse cells in each dimension
     Framses.read((char*)&dummy, sizeof(dummy));
     Framses.read((char*)&ramses_header_info.nx, sizeof(int));
     Framses.read((char*)&ramses_header_info.ny, sizeof(int));
@@ -226,140 +222,68 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     Framses.read((char*)&dummy, sizeof(dummy));
 
     // Maximum refinement level
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.nlevelmax, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.nlevelmax);
 
-    // Number of grids in each array
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.ngridmax, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    // Max number of grids in each array
+    RAMSES_fortran_read(Framses, ramses_header_info.ngridmax);
 
     // Number of boundaries
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.nboundary, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.nboundary);
 
     //this would be number of active grids but ignore for now
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.seekg(dummy,ios::cur);
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_skip(Framses);
 
     // Boxsize
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.BoxSize, sizeof(RAMSESFLOAT));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.BoxSize);
 
     //now skip 10 blocks (until mass_sph)
-    for (i=0;i<10;i++) {
-        Framses.read((char*)&dummy, sizeof(dummy));
-        //skip block size given by dummy
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-    }
+    RAMSES_fortran_skip(Framses, 10);
+    
     // mass_sph (not really the gas mass, though...)
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.mass[RAMSESGASTYPE], sizeof(RAMSESFLOAT));
-    Framses.read((char*)&dummy, sizeof(dummy));
+    RAMSES_fortran_read(Framses, ramses_header_info.mass[RAMSESGASTYPE]);
 
     Framses.close();
 
     //reopen to get number of amr cells might need to alter to read grid information and what cells have no so-called son cells
     if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
-    for (i=0;i<ramses_header_info.num_files;i++) {
-        sprintf(buf1,"%s/amr_%s.out%05d",fname,opt.ramsessnapname,i+1);
-        sprintf(buf2,"%s/amr_%s.out",fname,opt.ramsessnapname);
-        if (FileExists(buf1)) sprintf(buf,"%s",buf1);
-        else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
-        Framses.open(buf, ios::binary|ios::in);
-        for (j=0;j<6;j++) {
-            Framses.read((char*)&dummy, sizeof(dummy));
-            Framses.seekg(dummy,ios::cur);
-            Framses.read((char*)&dummy, sizeof(dummy));
-        }
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&ramses_header_info.npart[RAMSESGASTYPE], sizeof(int));
-        Framses.read((char*)&dummy, sizeof(dummy));
-        ramses_header_info.npartTotal[RAMSESGASTYPE]+=ramses_header_info.npart[RAMSESGASTYPE];
+	for (i=0;i<ramses_header_info.num_files;i++) {
+	    sprintf(buf1,"%s/amr_%s.out%05d",fname,opt.ramsessnapname,i+1);
+	    sprintf(buf2,"%s/amr_%s.out",fname,opt.ramsessnapname);
+	    if (FileExists(buf1)) sprintf(buf,"%s",buf1);
+	    else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
+	    Framses.open(buf, ios::binary|ios::in);
+	    // Skip the first 6 entries
+	    RAMSES_fortran_skip(Framses, 6);
+	    // Read the number of oct used
+	    RAMSES_fortran_read(Framses, ramses_header_info.npart[RAMSESGASTYPE]);
+	    ramses_header_info.npartTotal[RAMSESGASTYPE]+=ramses_header_info.npart[RAMSESGASTYPE];
+	    Framses.close();
+	}
+	
+	//now hydro header data
+	sprintf(buf1,"%s/hydro_%s.out00001",fname,opt.ramsessnapname);
+	sprintf(buf2,"%s/hydro_%s.out",fname,opt.ramsessnapname);
+	if (FileExists(buf1)) sprintf(buf,"%s",buf1);
+	else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
+	Framses.open(buf, ios::binary|ios::in);
+
+	// Skip ncpu
+	RAMSES_fortran_skip(Framses);
+	// Read nvar
+	RAMSES_fortran_read(Framses, ramses_header_info.nvarh);
+	// Skip ndim, nlevelmax, nboundary
+	RAMSES_fortran_skip(Framses, 3);
+	// Read gamma
+	RAMSES_fortran_read(Framses, ramses_header_info.gamma_index);
+	Framses.close();
     }
 
-    //now hydro header data
-    sprintf(buf1,"%s/hydro_%s.out00001",fname,opt.ramsessnapname);
-    sprintf(buf2,"%s/hydro_%s.out",fname,opt.ramsessnapname);
-    if (FileExists(buf1)) sprintf(buf,"%s",buf1);
-    else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
-    Framses.open(buf, ios::binary|ios::in);
-
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.seekg(dummy,ios::cur);
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.nvarh, sizeof(int));
-    Framses.read((char*)&dummy, sizeof(dummy));
-    for (i=0;i<3;i++) {
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-    }
-
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.read((char*)&ramses_header_info.gamma_index, sizeof(RAMSESFLOAT));
-    Framses.read((char*)&dummy, sizeof(dummy));
-    Framses.close();
-    }
-
-
-    //
-    // Compute Mass of DM particles in RAMSES code units
-    //
-    fstream Finfo;
-    sprintf(buf1,"%s/info_%s.txt", fname,opt.ramsessnapname);
-    Finfo.open(buf1, ios::in);
-    Finfo>>stringbuf>>stringbuf>>opt.num_files;//ncpu
-    Finfo.ignore();
-    getline(Finfo,stringbuf);//ndim
-    getline(Finfo,stringbuf);//lmin
-    getline(Finfo,stringbuf);//lmax
-    getline(Finfo,stringbuf);//ngridmax
-    getline(Finfo,stringbuf);//nstep_coarse
-    getline(Finfo,stringbuf);//blank
-    getline(Finfo,stringbuf);//box
-    getline(Finfo,stringbuf);//time
-    getline(Finfo,stringbuf);//a
-    getline(Finfo,stringbuf);//hubble
-    Finfo>>stringbuf>>stringbuf>>OmegaM;
-    Finfo.ignore();
-    getline(Finfo,stringbuf);//omega_l
-    getline(Finfo,stringbuf);//omega_k
-    Finfo>>stringbuf>>stringbuf>>OmegaB;
-    Finfo.ignore();
-    Finfo.close();
-    dmp_mass = 1.0 / (opt.Neff*opt.Neff*opt.Neff) * (OmegaM - OmegaB) / OmegaM;
-
-    //
     // List existing fields in part_file_descriptor.txt
-    // Similary, read hydro_file_descriptor.txt
-    // 
-    vector< array<string, 2> > partfields, hydrofields;
-
+    vector< array<string, 2> > partfields;
     sprintf(buf1,"%s/part_file_descriptor.txt", fname);
     partfields = RAMSES_read_descriptor(buf1);
-    sprintf(buf1,"%s/hydro_file_descriptor.txt", fname);
-    hydrofields = RAMSES_read_descriptor(buf1);
 
-    // cout<<"Found "<<partfields.size()<<" particle fields"<<endl;
-    // for (i=0;i<partfields.size();++i)
-    //   {
-    //     cout<<"Part entry "<<i<<" is "<<partfields[i][0]<<" with type "<<partfields[i][1]<<endl;
-    //   }
-
-    // cout<<"Found "<<hydrofields.size()<<" hydro fields"<<endl;
-    // for (i=0;i<hydrofields.size();++i)
-    //   {
-    //     cout<<"Hydro entry "<<i<<" is "<<hydrofields[i][0]<<" with type "<<hydrofields[i][1]<<endl;
-    //   }
-
-    //now particle info
+    // Read particle info
     for (i=0;i<ramses_header_info.num_files;i++)
     {
         sprintf(buf1,"%s/part_%s.out%05d",fname,opt.ramsessnapname,i+1);
@@ -372,92 +296,28 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
         ramses_header_info.npart[RAMSESSTARTYPE] = 0;
         ramses_header_info.npart[RAMSESSINKTYPE] = 0;
 
-        //number of cpus
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        //number of dimensions
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
+	// Skip ncpu and ndim
+	RAMSES_fortran_skip(Framses, 2);
         // Total number of LOCAL particles (npart)
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&ramses_header_info.npartlocal, sizeof(int));
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Random seeds
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
+	RAMSES_fortran_read(Framses, ramses_header_info.npartlocal);
+        // Skip Random seeds
+	RAMSES_fortran_skip(Framses, 1);
         // Total number of Stars over all processors
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&ramses_header_info.nstarTotal, sizeof(int));
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Total mass of stars
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Total lost mass of stars
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
+	RAMSES_fortran_read(Framses, ramses_header_info.nstarTotal);
+        // Skip total mass of stars and total lost mass of stars
+	RAMSES_fortran_skip(Framses, 2);
         // Number of sink particles over the whole simulation (all are included in
         // all processors)
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&ramses_header_info.npartTotal[RAMSESSINKTYPE], sizeof(int));
-        Framses.read((char*)&dummy, sizeof(dummy));
+	RAMSES_fortran_read(Framses, ramses_header_info.npartTotal[RAMSESSINKTYPE]);
 
-        //to determine how many particles of each type, need to look at the mass
-        // Skip pos, vel
-	// NB: here, assumes 3D
-        for (j = 0; j < 6; j++)
-        {
-            Framses.read((char*)&dummy, sizeof(dummy));
-            Framses.seekg(dummy,ios::cur);
-            Framses.read((char*)&dummy, sizeof(dummy));
-        }
-        //allocate memory to store masses, ages and types
-        dummy_mass = new double [ramses_header_info.npartlocal];
-        dummy_age  = new double [ramses_header_info.npartlocal];
-        dummy_type = new char [ramses_header_info.npartlocal];
-
-        // Read Mass
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&dummy_mass[0], dummy);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Skip Id
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Skip level
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Read family
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&dummy_type[0], dummy);
-        Framses.read((char*)&dummy, sizeof(dummy));
+	//allocate memory to store types
+	dummy_type = new char [ramses_header_info.npartlocal];
 	
-        // Skip tag
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.seekg(dummy,ios::cur);
-        Framses.read((char*)&dummy, sizeof(dummy));
-
-        // Read Birth epoch
-        //necessary to separate ghost star particles with negative ages from real one
-	//MT: not anymore?
-        Framses.read((char*)&dummy, sizeof(dummy));
-        Framses.read((char*)&dummy_age[0], dummy);
-        Framses.read((char*)&dummy, sizeof(dummy));
+	for(j=0; j<partfields.size(); ++j)
+	{
+	    if (partfields[j][0] == "family") RAMSES_fortran_read(Framses, dummy_type);
+	    else RAMSES_fortran_skip(Framses, 1);
+	}
 
         ghoststars = 0;
         for (j = 0; j < ramses_header_info.npartlocal; j++)
@@ -467,22 +327,18 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
 		// This is a DM particle
                 ramses_header_info.npart[RAMSESDMTYPE]++;
 	    }
-            else
+            else if (dummy_type[j] == 2)
 	    {
-                if (dummy_type[j] == 2)
-		{
-		    // This is a star particle
-		    // MT: not sure that the following is relevant
-		    // Indeed, for a non-cosmo run, we might have stars with age 0...
-                    if (dummy_age[j] != 0.0)
-			ramses_header_info.npart[RAMSESSTARTYPE]++;
-		    else
-			ghoststars++;
-		}
+		// Any form of star particles
+		ramses_header_info.npart[RAMSESSTARTYPE]++;
 	    }
-        }
-        delete [] dummy_age;
-        delete [] dummy_mass;
+	    else
+	    {
+		// Can be a cloud, or whatever
+		// TODO: account for them?
+		ghoststars++;
+	    }
+	}
         delete [] dummy_type;
         Framses.close();
 
@@ -507,6 +363,7 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     if (ptype==PSTALL || ptype==PSTGAS) opt.numpart[GASTYPE]=ramses_header_info.npartTotal[RAMSESGASTYPE];
     if (ptype==PSTALL || ptype==PSTSTAR) opt.numpart[STARTYPE]=ramses_header_info.npartTotal[RAMSESSTARTYPE];
     if (ptype==PSTALL || ptype==PSTBH) opt.numpart[BHTYPE]=ramses_header_info.npartTotal[RAMSESSINKTYPE];
+
     return nbodies;
 
 }
