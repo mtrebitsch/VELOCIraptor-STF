@@ -17,6 +17,8 @@
 
 //-- RAMSES SPECIFIC IO
 
+#include <sstream>
+
 #include "stf.h"
 
 #include "ramsesitems.h"
@@ -81,6 +83,34 @@ int RAMSES_fortran_skip(fstream &F, int nskips){
         F.read((char*)&dummy, sizeof(dummy));byteoffset+=sizeof(int);
     }
     return byteoffset;
+}
+
+vector<array<string,2>> RAMSES_read_descriptor(char *bufname){
+    fstream Fdesc;
+    string fieldname, fieldtype, tmpnum, stringbuf;
+    int fieldnum;
+    vector< array<string, 2> > vfields;
+    stringstream fieldstream;
+    Fdesc.open(bufname, ios::in);
+    getline(Fdesc,stringbuf); // version comment
+    getline(Fdesc,stringbuf); // header comment
+    while (getline(Fdesc, stringbuf))
+    {
+	fieldstream.str(stringbuf);
+	// Read the field ID, name and type
+	getline(fieldstream, tmpnum, ',');
+	getline(fieldstream, fieldname, ',');
+	getline(fieldstream, fieldtype, ',');
+	fieldstream.clear();
+	// Clean a bit the strings, because C++
+	fieldname.erase( remove_if( fieldname.begin(), fieldname.end(), ::isspace ), fieldname.end() );
+	fieldtype.erase( remove_if( fieldtype.begin(), fieldtype.end(), ::isspace ), fieldtype.end() );
+	fieldnum = stoi(tmpnum);
+	// We need to store those in an array (fieldname and fieldtype are probably enough)
+	vfields.push_back({fieldname, fieldtype});
+    }
+    Fdesc.close();
+    return vfields;
 }
 
 Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
@@ -305,6 +335,29 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     Finfo.ignore();
     Finfo.close();
     dmp_mass = 1.0 / (opt.Neff*opt.Neff*opt.Neff) * (OmegaM - OmegaB) / OmegaM;
+
+    //
+    // List existing fields in part_file_descriptor.txt
+    // Similary, read hydro_file_descriptor.txt
+    // 
+    vector< array<string, 2> > partfields, hydrofields;
+
+    sprintf(buf1,"%s/part_file_descriptor.txt", fname);
+    partfields = RAMSES_read_descriptor(buf1);
+    sprintf(buf1,"%s/hydro_file_descriptor.txt", fname);
+    hydrofields = RAMSES_read_descriptor(buf1);
+
+    // cout<<"Found "<<partfields.size()<<" particle fields"<<endl;
+    // for (i=0;i<partfields.size();++i)
+    //   {
+    //     cout<<"Part entry "<<i<<" is "<<partfields[i][0]<<" with type "<<partfields[i][1]<<endl;
+    //   }
+
+    // cout<<"Found "<<hydrofields.size()<<" hydro fields"<<endl;
+    // for (i=0;i<hydrofields.size();++i)
+    //   {
+    //     cout<<"Hydro entry "<<i<<" is "<<hydrofields[i][0]<<" with type "<<hydrofields[i][1]<<endl;
+    //   }
 
     //now particle info
     for (i=0;i<ramses_header_info.num_files;i++)
@@ -834,198 +887,199 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
                 ///Need to check this for correct 'endianness'
 //             for (int kk=0;kk<3;kk++) {xtemp[kk]=LittleRAMSESFLOAT(xtemp[kk]);vtemp[kk]=LittleRAMSESFLOAT(vtemp[kk]);}
 #ifndef NOMASS
-            mtemp=mtempchunk[nn];
+		mtemp=mtempchunk[nn];
 #else
-            mtemp=1.0;
+		mtemp=1.0;
 #endif
-            ageval = agetempchunk[nn];
-	    if (typechunk[nn] == 1) typeval = DARKTYPE;
-            else if (typechunk[nn] == 2) typeval = STARTYPE;
-            else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
-
+		ageval = agetempchunk[nn];
+		if (typechunk[nn] == 1) typeval = DARKTYPE;
+		else if (typechunk[nn] == 2) typeval = STARTYPE;
+		else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
+		
 #ifdef USEMPI
-            //determine processor this particle belongs on based on its spatial position
-            ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
-            ibufindex=ibuf*BufSize+Nbuf[ibuf];
+		//determine processor this particle belongs on based on its spatial position
+		ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
+		ibufindex=ibuf*BufSize+Nbuf[ibuf];
 #endif
-            //reset hydro quantities of buffer
+		//reset hydro quantities of buffer
 #ifdef USEMPI
 #ifdef GASON
-            Pbuf[ibufindex].SetU(0);
+		Pbuf[ibufindex].SetU(0);
 #ifdef STARON
-            Pbuf[ibufindex].SetSFR(0);
-            Pbuf[ibufindex].SetZmet(0);
+		Pbuf[ibufindex].SetSFR(0);
+		Pbuf[ibufindex].SetZmet(0);
 #endif
 #endif
 #ifdef STARON
-            Pbuf[ibufindex].SetZmet(0);
-            Pbuf[ibufindex].SetTage(0);
+		Pbuf[ibufindex].SetZmet(0);
+		Pbuf[ibufindex].SetTage(0);
 #endif
 #ifdef BHON
 #endif
 #endif
-
-            if (opt.partsearchtype==PSTALL) {
+		
+		if (opt.partsearchtype==PSTALL) {
 #ifdef USEMPI
-                Pbuf[ibufindex]=Particle(mtemp*mscale,
-                    xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                    vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                    vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                    vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                    count2,typeval);
-                Pbuf[ibufindex].SetPID(idval);
+		    Pbuf[ibufindex]=Particle(mtemp*mscale,
+					     xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+					     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+					     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+					     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+					     count2,typeval);
+		    Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                if (opt.iextendedoutput)
-                {
-                    Part[ibufindex].SetInputFileID(i);
-                    Part[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-                }
+		    if (opt.iextendedoutput)
+		    {
+			Part[ibufindex].SetInputFileID(i);
+			Part[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+		    }
 #endif
-                Nbuf[ibuf]++;
-                MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+		    Nbuf[ibuf]++;
+		    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-                Part[count2]=Particle(mtemp*mscale,
-                    xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                    vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                    vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                    vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                    count2,typeval);
-                Part[count2].SetPID(idval);
+		    Part[count2]=Particle(mtemp*mscale,
+					  xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+					  vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+					  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+					  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+					  count2,typeval);
+		    Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                if (opt.iextendedoutput)
-                {
-                  Part[count2].SetInputFileID(i);
-                  Part[count2].SetInputIndexInFile(nn+ninputoffset);
-                }
+		    if (opt.iextendedoutput)
+		    {
+			Part[count2].SetInputFileID(i);
+			Part[count2].SetInputIndexInFile(nn+ninputoffset);
+		    }
 #endif
 #endif
-                count2++;
-            }
-            else if (opt.partsearchtype==PSTDARK) {
-                if (!(typeval==STARTYPE||typeval==BHTYPE)) {
+		    count2++;
+		}
+		else if (opt.partsearchtype==PSTDARK) {
+		    if (!(typeval==STARTYPE||typeval==BHTYPE)) {
 #ifdef USEMPI
-                    Pbuf[ibufindex]=Particle(mtemp*mscale,
-                        xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                        vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                        vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                        vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                        count2,DARKTYPE);
-                    Pbuf[ibufindex].SetPID(idval);
+			Pbuf[ibufindex]=Particle(mtemp*mscale,
+						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						 count2,DARKTYPE);
+			Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                    if (opt.iextendedoutput)
-                    {
-                        Pbuf[ibufindex].SetInputFileID(i);
-                        Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-                    }
+			if (opt.iextendedoutput)
+			{
+			    Pbuf[ibufindex].SetInputFileID(i);
+			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
-                    //ensure that store number of particles to be sent to other reading threads
-                    Nbuf[ibuf]++;
-                    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+			//ensure that store number of particles to be sent to other reading threads
+			Nbuf[ibuf]++;
+			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-                    Part[count2]=Particle(mtemp*mscale,
-                        xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                        vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                        vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                        vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                        count2,typeval);
-                    Part[count2].SetPID(idval);
+			Part[count2]=Particle(mtemp*mscale,
+					      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+					      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+					      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+					      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+					      count2,typeval);
+			Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                    if (opt.iextendedoutput)
-                    {
-                        Part[count2].SetInputFileID(i);
-                        Part[count2].SetInputIndexInFile(nn+ninputoffset);
-                    }
+			if (opt.iextendedoutput)
+			{
+			    Part[count2].SetInputFileID(i);
+			    Part[count2].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
 #endif
-                    count2++;
-                }
-                else if (opt.iBaryonSearch) {
+			count2++;
+		    }
+		    else if (opt.iBaryonSearch) {
 #ifdef USEMPI
-                    Pbuf[ibufindex]=Particle(mtemp*mscale,
-                        xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                        vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                        vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                        vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                        count2);
-                    Pbuf[ibufindex].SetPID(idval);
+			Pbuf[ibufindex]=Particle(mtemp*mscale,
+						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						 count2);
+			Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                    if (opt.iextendedoutput)
-                    {
-                        Pbuf[ibufindex].SetInputFileID(i);
-                        Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-                    }
+			if (opt.iextendedoutput)
+			{
+			    Pbuf[ibufindex].SetInputFileID(i);
+			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
-                    if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
-                    else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
-                    //ensure that store number of particles to be sent to the reading threads
-                    Nbuf[ibuf]++;
-                    if (ibuf==ThisTask) {
-                        if (k==RAMSESSTARTYPE) Nlocalbaryon[2]++;
-                        else if (k==RAMSESSINKTYPE) Nlocalbaryon[3]++;
-                    }
-                    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
+			if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
+			else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
+			//ensure that store number of particles to be sent to the reading threads
+			Nbuf[ibuf]++;
+			if (ibuf==ThisTask) {
+			    if (k==RAMSESSTARTYPE) Nlocalbaryon[2]++;
+			    else if (k==RAMSESSINKTYPE) Nlocalbaryon[3]++;
+			}
+			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
 #else
-                    Pbaryons[bcount2]=Particle(mtemp*mscale,
-                        xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                        vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                        vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                        vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                        count2,typeval);
-                    Pbaryons[bcount2].SetPID(idval);
+			Pbaryons[bcount2]=Particle(mtemp*mscale,
+						   xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						   vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						   count2,typeval);
+			Pbaryons[bcount2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                    if (opt.iextendedoutput)
-                    {
-                        Part[bcount2].SetInputFileID(i);
-                        Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
-                    }
+			if (opt.iextendedoutput)
+			{
+			    Part[bcount2].SetInputFileID(i);
+			    Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
 #endif
-                    bcount2++;
-                }
-            }
-            else if (opt.partsearchtype==PSTSTAR) {
-                if (typeval==STARTYPE) {
+			bcount2++;
+		    }
+		}
+		else if (opt.partsearchtype==PSTSTAR) {
+		    if (typeval==STARTYPE) {
 #ifdef USEMPI
-                    //if using MPI, determine proccessor and place in ibuf, store particle in particle buffer and if buffer full, broadcast data
-                    //unless ibuf is 0, then just store locally
-                    Pbuf[ibufindex]=Particle(mtemp*mscale,
-                        xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                        vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                        vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                        vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                        count2,STARTYPE);
-                    //ensure that store number of particles to be sent to the reading threads
-                    Pbuf[ibufindex].SetPID(idval);
+			//if using MPI, determine proccessor and place in ibuf, store particle in particle buffer and if buffer full, broadcast data
+			//unless ibuf is 0, then just store locally
+			Pbuf[ibufindex]=Particle(mtemp*mscale,
+						 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+						 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+						 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+						 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+						 count2,STARTYPE);
+			//ensure that store number of particles to be sent to the reading threads
+			Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                    if (opt.iextendedoutput)
-                    {
-                        Pbuf[ibufindex].SetInputFileID(i);
-                        Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
-                    }
+			if (opt.iextendedoutput)
+			{
+			    Pbuf[ibufindex].SetInputFileID(i);
+			    Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
-                    Nbuf[ibuf]++;
-                    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+			Nbuf[ibuf]++;
+			MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-                Part[count2]=Particle(mtemp*mscale,
-                    xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
-                    vtemp[0]*opt.V+Hubbleflow*xtemp[0],
-                    vtemp[1]*opt.V+Hubbleflow*xtemp[1],
-                    vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-                    count2,typeval);
-                Part[count2].SetPID(idval);
+			Part[count2]=Particle(mtemp*mscale,
+					      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+					      vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+					      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+					      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+					      count2,typeval);
+			Part[count2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
-                  if (opt.iextendedoutput)
-                  {
-                      Part[count2].SetInputFileID(i);
-                      Part[count2].SetInputIndexInFile(nn+ninputoffset);
-	              }
+			if (opt.iextendedoutput)
+			{
+			    Part[count2].SetInputFileID(i);
+			    Part[count2].SetInputIndexInFile(nn+ninputoffset);
+			}
 #endif
 #endif
-                    count2++;
-                }
-            }
-        }//end of ghost particle check
+			count2++;
+		    }
+		}
+	    }//end of ghost particle check
         }//end of loop over chunk
+	
         delete[] xtempchunk;
         delete[] vtempchunk;
         delete[] mtempchunk;
