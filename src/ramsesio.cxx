@@ -15,6 +15,16 @@
  *
  */
 
+/* TODO MT (not in order):
+   - MPI / OpenMP
+   - PSTGAS
+   - Read BH
+   - stellar metallicity
+   - stellar ages (if possible?)
+   - temperature (we have internal energy, maybe not necessary)
+   - zoom things
+*/
+
 //-- RAMSES SPECIFIC IO
 
 #include <sstream>
@@ -256,7 +266,9 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
 	    RAMSES_fortran_skip(Framses, 6);
 	    // Read the number of oct used
 	    RAMSES_fortran_read(Framses, ramses_header_info.npart[RAMSESGASTYPE]);
-	    ramses_header_info.npartTotal[RAMSESGASTYPE]+=ramses_header_info.npart[RAMSESGASTYPE];
+	    // There are 2**ndim cells per oct
+	    ramses_header_info.npart[RAMSESGASTYPE] *= pow(2,ramses_header_info.ndim);
+	    ramses_header_info.npartTotal[RAMSESGASTYPE] += ramses_header_info.npart[RAMSESGASTYPE];
 	    Framses.close();
 	}
 	
@@ -397,6 +409,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     int typeval;
     RAMSESFLOAT ageval,metval;
     int *ngridlevel,*ngridbound,*ngridfile;
+    int *ncache, *numbl, *numbb;
     int lmin=1000000,lmax=0;
     double dmp_mass;
 
@@ -756,6 +769,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 			}
 			else if (opt.partsearchtype==PSTDARK) {
 			    if (!(typeval==STARTYPE||typeval==BHTYPE)){
+				// Dealing with a DM particle
 #ifdef USEMPI
 			        Pbuf[ibufindex]=Particle(mtemp*mscale,
 				                         xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
@@ -793,13 +807,14 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				count2++;
 			    }
 			    else if (opt.iBaryonSearch) {
+				// Baryon particle AND we search for them
 #ifdef USEMPI
 				Pbuf[ibufindex]=Particle(mtemp*mscale,
 							 xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
 							 vtemp[0]*opt.V+Hubbleflow*xtemp[0],
 							 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 							 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-							 count2);
+							 bcount2);  //count2 -> bcount2?
 				Pbuf[ibufindex].SetPID(idval);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
@@ -823,7 +838,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							   vtemp[0]*opt.V+Hubbleflow*xtemp[0],
 							   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 							   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-							   count2,typeval);
+							   bcount2,typeval); //count2 -> bcount2?
 				Pbaryons[bcount2].SetPID(idval);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
@@ -932,6 +947,21 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     if (ireadtask[ThisTask]>=0) {
     inreadsend=0;
 #endif
+    // List existing hydro fields from hydro_file_descriptor.txt
+    vector< array<string, 2> > hfields;
+    sprintf(buf1,"%s/hydro_file_descriptor.txt", opt.fname);
+    hfields = RAMSES_read_descriptor(buf1);
+    // define the indices for the hydro variables
+    int IDrho=-1, IDvx=-1, IDvy=-1, IDvz=-1, IDU=-1, IDZ=-1;
+    for (ivar=0;ivar<hfields.size();++ivar) {
+	if (hfields[ivar][0] == string("density")) IDrho = ivar;
+	if (hfields[ivar][0] == string("velocity_x")) IDvx = ivar;
+	if (hfields[ivar][0] == string("velocity_y")) IDvy = ivar;
+	if (hfields[ivar][0] == string("velocity_z")) IDvz = ivar;
+	if (hfields[ivar][0] == string("pressure")) IDU = ivar;
+	if (hfields[ivar][0] == string("metallicity")) IDZ = ivar;
+    }
+
     for (i=0;i<opt.num_files;i++) if (ireadfile[i]) {
         sprintf(buf1,"%s/amr_%s.out%05d",opt.fname,opt.ramsessnapname,i+1);
         sprintf(buf2,"%s/amr_%s.out",opt.fname,opt.ramsessnapname);
@@ -943,13 +973,12 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
         if (FileExists(buf1)) sprintf(buf,"%s",buf1);
         else if (FileExists(buf2)) sprintf(buf,"%s",buf2);
         Fhydro[i].open(buf, ios::binary|ios::in);
-        //MT: set some of header[i] properties to those read from the info file
         header[i].BoxSize = header[ifirstfile].BoxSize;
-        //MT
 
         //read some of the amr header till get to number of cells in current file
         //@{
         byteoffset=0;
+	byteoffset+=RAMSES_fortran_read(Famr[i],header[i].nfiles);  // read ncpu
         byteoffset+=RAMSES_fortran_read(Famr[i],header[i].ndim);
         header[i].twotondim=pow(2,header[i].ndim);
         Famr[i].read((char*)&dummy, sizeof(dummy));
@@ -959,229 +988,322 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
         Famr[i].read((char*)&dummy, sizeof(dummy));
         byteoffset+=RAMSES_fortran_read(Famr[i],header[i].nlevelmax);
         byteoffset+=RAMSES_fortran_read(Famr[i],header[i].ngridmax);
-        byteoffset+=RAMSES_fortran_read(Famr[i],header[i].nboundary);
+        byteoffset+=RAMSES_fortran_read(Famr[i],header[i].nboundary); // nboundary == 0 i periodic
         byteoffset+=RAMSES_fortran_read(Famr[i],header[i].npart[RAMSESGASTYPE]);
 
-        //then skip the rest
-        for (j=0;j<14;j++) RAMSES_fortran_skip(Famr[i]);
+        //Skip until taill (included)
+        RAMSES_fortran_skip(Famr[i], 14);
         if (lmin>header[i].nlevelmax) lmin=header[i].nlevelmax;
         if (lmax<header[i].nlevelmax) lmax=header[i].nlevelmax;
         //@}
         //read header info from hydro files
         //@{
-        RAMSES_fortran_skip(Fhydro[i]);
+        RAMSES_fortran_skip(Fhydro[i]);  // skip ncpu
         RAMSES_fortran_read(Fhydro[i],header[i].nvarh);
-        RAMSES_fortran_skip(Fhydro[i]);
-        RAMSES_fortran_skip(Fhydro[i]);
-        RAMSES_fortran_skip(Fhydro[i]);
+        RAMSES_fortran_skip(Fhydro[i]);  // skip ndim
+        RAMSES_fortran_skip(Fhydro[i]);  // skip nlevelmax
+        RAMSES_fortran_skip(Fhydro[i]);  // skip nboundary
         RAMSES_fortran_read(Fhydro[i],header[i].gamma_index);
         //@}
     }
+
+
+    // Define some convenience variables
+    int ncpu, nboundary;    
     for (i=0;i<opt.num_files;i++) if (ireadfile[i]) {
-        //then apparently read ngridlevels, which appears to be an array storing the number of grids at a given level
-        ngridlevel=new int[header[i].nlevelmax];
-        ngridfile=new int[(1+header[i].nboundary)*header[i].nlevelmax];
-        RAMSES_fortran_read(Famr[i],ngridlevel);
-        for (j=0;j<header[i].nlevelmax;j++) ngridfile[j]=ngridlevel[j];
-        //skip some more
-        RAMSES_fortran_skip(Famr[i]);
-        //if nboundary>0 then need two skip twice then read ngridbound
-        if(header[i].nboundary>0) {
-            ngridbound=new int[header[i].nboundary*header[i].nlevelmax];
-            RAMSES_fortran_skip(Famr[i]);
-            RAMSES_fortran_skip(Famr[i]);
-            //ngridbound is an array of some sort but I don't see what it is used for
-            RAMSES_fortran_read(Famr[i],ngridbound);
-            for (j=0;j<header[i].nlevelmax;j++) ngridfile[header[i].nlevelmax+j]=ngridbound[j];
-        }
-        //skip some more
-        RAMSES_fortran_skip(Famr[i],2);
-        //if odering list in info is bisection need to skip more
-        if (orderingstring==string("bisection")) RAMSES_fortran_skip(Famr[i],5);
-        else RAMSES_fortran_skip(Famr[i],4);
+	ncpu = header[i].nfiles;
+	nboundary = header[i].nboundary;
+	// First, deal with AMR files
+	ncache=new int[(ncpu+nboundary)*header[i].nlevelmax];
+	// ncache should contains numbl and numbb
+
+	
+	// Read number of grids in level: numbl(1:ncpu, 1:nlevelmax)
+	numbl=new int[ncpu*header[i].nlevelmax];
+	RAMSES_fortran_read(Famr[i],numbl);
+
+	// Fill the first part of ncache (ibound <= ncpu)
+	for (j=0;j<header[i].nlevelmax;j++) {
+	    for (k=0;k<ncpu;k++) {
+		ncache[(ncpu+nboundary)*j + k] = numbl[ncpu*j+k];
+	    }
+	}
+	
+	// skip total number of grids per level: numbtot(1:10, 1:nlevelmax)
+	RAMSES_fortran_skip(Famr[i]);
+	if (header[i].nboundary>0) {
+	    // simple_boundary case, non periodic
+	    // skip headb, tailb
+	    RAMSES_fortran_skip(Famr[i], 2);
+	    // read numbb
+	    numbb=new int[header[i].nboundary*header[i].nlevelmax];
+	    RAMSES_fortran_read(Famr[i],numbb);
+	    // If needed, fill the rest of ncache
+	    for (j=0;j<header[i].nlevelmax;j++) {
+		for (k=0;k<nboundary;k++) {
+		    ncache[(ncpu+nboundary)*j + k+ncpu] = numbl[nboundary*j+k];
+		}
+	    }
+	}
+	// skip free memory (headf,tailf,numbf,used_mem,used_mem_tot) and ordering
+	RAMSES_fortran_skip(Famr[i], 2);
+	// skip keys
+	if (orderingstring==string("bisection")) RAMSES_fortran_skip(Famr[i],5);
+	else RAMSES_fortran_skip(Famr[i]);
+	// skip coarse levels (son, flag1, cpu_map)
+	RAMSES_fortran_skip(Famr[i], 3);
 
         ninputoffset=0;
 
-        for (k=0;k<header[i].nboundary+1;k++) {
-            for (j=0;j<header[i].nlevelmax;j++) {
-                //first read amr for positions
-                chunksize=nchunk=ngridfile[k*header[i].nlevelmax+j];
-                if (chunksize>0) {
-                    xtempchunk=new RAMSESFLOAT[3*chunksize];
-                    //store son value in icell
-                    icellchunk=new int[header[i].twotondim*chunksize];
-                    //skip grid index, next index and prev index.
-                    RAMSES_fortran_skip(Famr[i],3);
-                    //now read grid centre
-                    for (idim=0;idim<header[i].ndim;idim++) {
+	// start loop on levels for hydro and AMR
+	for (j=0;j<header[i].nlevelmax;j++) {
+	    double dx = pow(0.5, j); // local cell size
+	    // start loop on boundaries for both
+	    for (k=0;k<(ncpu+nboundary);k++) {
+		/* AMR structure:
+		   --------------
+		   (only if ncache>0)
+		   integer: ind_grid(1..ncache)
+		   integer: next(1..ncache)
+		   integer: prev(1..ncache)
+		   for idim in [1,ndim]:
+		     float: xg(1..ncache, idim)
+		   integer: father(1..ncache)
+		   for ind in [1,2*ndim]:
+		     integer: nbor(1..ncache, ind)
+		   for ind in [1,2**ndim]:
+		     integer: son(1..ncache, ind)  // with iskip
+		   for ind in [1,2**ndim]:
+		     integer: cpu_map(1..ncache, ind)  // with iskip
+		   for ind in [1,2**ndim]:
+		     integer: flag1(1..ncache, ind)  // with iskip
+
+		   Hydro structure:
+		   ----------------
+		   integer: ilevel
+		   integer: ncache
+		   if ncache>0:
+		     for ind in [1,2**ndim]:
+		       iskip <- ncoarse + ind*ngridmax
+		       write density[ind_grid(i)+iskip]
+		       write vx[ind_grid(i)+iskip]
+		       ...
+		   
+		*/
+
+		// get ncache
+		chunksize = ncache[(ncpu+nboundary)*j + k];
+		if (chunksize>0) {
+		    // We want the cell positions from the AMR files
+		    // Skip ind_grid, next and prev
+		    RAMSES_fortran_skip(Famr[i], 3);
+		    // Store grid centres
+		    xtempchunk=new RAMSESFLOAT[3*chunksize];
+		    for (idim=0;idim<header[i].ndim;idim++) {
                         RAMSES_fortran_read(Famr[i],&xtempchunk[idim*chunksize]);
                     }
-                    //skip father index, then neighbours index
-                    RAMSES_fortran_skip(Famr[i],1+2*header[i].ndim);
-                    //read son index to determine if a cell in a specific grid is at the highest resolution and needs to be represented by a particle
-                    for (idim=0;idim<header[i].twotondim;idim++) {
+		    // Skip father (1) and nbor (2*ndim)
+		    RAMSES_fortran_skip(Famr[i], 1+2*header[i].ndim);
+		    // Read son index (2**ndim), needed to identify leaf cells
+		    icellchunk=new int[header[i].twotondim*chunksize];
+		    for (idim=0;idim<header[i].twotondim;idim++) {
                         RAMSES_fortran_read(Famr[i],&icellchunk[idim*chunksize]);
                     }
-                    //skip cpu map and refinement map (2^ndim*2)
+                    //skip cpu map and refinement map (2**ndim * 2)
                     RAMSES_fortran_skip(Famr[i],2*header[i].twotondim);
-                }
-                RAMSES_fortran_skip(Fhydro[i]);
-                //then read hydro for other variables (first is density, then velocity, then pressure, then metallicity )
-                if (chunksize>0) {
-                    hydrotempchunk=new RAMSESFLOAT[chunksize*header[i].twotondim*header[i].nvarh];
-                    //first read velocities (for 2 cells per number of dimensions (ie: cell corners?))
+		} // chunksize > 0
+
+		// We can now start working with the hydro files
+		// Skip ilevel and ncache (already known)
+		RAMSES_fortran_skip(Fhydro[i], 2);
+		
+		if (chunksize>0) {
+		    // Define an array to receive hydro data: size is (ncache)*(2**ndim)*(nvar)
+		    hydrotempchunk=new RAMSESFLOAT[chunksize*header[i].twotondim*header[i].nvarh];
+		    // loop over cells in octs (per dimension)
                     for (idim=0;idim<header[i].twotondim;idim++) {
+			// loop over variables
                         for (ivar=0;ivar<header[i].nvarh;ivar++) {
-                            RAMSES_fortran_read(Fhydro[i],&hydrotempchunk[idim*chunksize*header[i].nvarh+ivar*chunksize]);
-                            for (igrid=0;igrid<chunksize;igrid++) {
-                                //once we have looped over all the hydro data then can start actually storing it into the particle structures
-                                if (ivar==header[i].nvarh-1) {
-                                    //if cell has no internal cells or at maximum level produce a particle
-                                    if (icellchunk[idim*chunksize+igrid]==0 || j==header[i].nlevelmax-1) {
-                                        //first suggestion is to add some jitter to the particle positions
-                                        double dx = pow(0.5, j);
-                                        int ix, iy, iz;
-                                        //below assumes three dimensions with 8 corners (? maybe cells) per grid
-                                        iz = idim/4;
-                                        iy = (idim - (4*iz))/2;
-                                        ix = idim - (2*iy) - (4*iz);
-                                        // Calculate absolute coordinates + jitter, and generate particle
-                                        xpos[0] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid] + (double(ix)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
-                                        xpos[1] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid+1*chunksize] + (double(iy)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
-                                        xpos[2] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid+2*chunksize] + (double(iz)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
-#ifdef USEMPI
-                                        //determine processor this particle belongs on based on its spatial position
-                                        ibuf=MPIGetParticlesProcessor(xpos[0],xpos[1],xpos[2]);
-                                        ibufindex=ibuf*BufSize+Nbuf[ibuf];
-#endif
+			    // Read a block of size ncache, for each variable, for each sub-oct
+			    RAMSES_fortran_read(Fhydro[i], &hydrotempchunk[chunksize*(idim*header[i].nvarh+ivar)]);			    
+			} // loop over variables
+		    } // loop over cells in octs (per dimension)
 
-                                        vpos[0]=hydrotempchunk[idim*chunksize*header[i].nvarh+1*chunksize+igrid];
-                                        vpos[1]=hydrotempchunk[idim*chunksize*header[i].nvarh+2*chunksize+igrid];
-                                        vpos[2]=hydrotempchunk[idim*chunksize*header[i].nvarh+3*chunksize+igrid];
-                                        mtemp=dx*dx*dx*hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid];
-                                        //the self energy P/rho is given by
-                                        utemp=hydrotempchunk[idim*chunksize*header[i].nvarh+4*chunksize+igrid]/hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]/(header[i].gamma_index-1.0);
-                                        rhotemp=hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]*rhoscale;
-                                        Ztemp=hydrotempchunk[idim*chunksize*header[i].nvarh+5*chunksize+igrid];
-                                        if (opt.partsearchtype==PSTALL) {
+		    // At this stage, hydrotempchunk should contain the hydro data
+		    // for a given level and a given cpu
+
+		    // We can now start to store things in particle structures
+                    for (idim=0;idim<header[i].twotondim;idim++) {  // loop over cells in octs (per dimension)
+			int ix=0, iy=0, iz=0;
+			for (igrid=0;igrid<chunksize;igrid++) {  // loop over cells in the chunk
+			    // Select only leaf cells (internal cells or at maximum level)
+			    if (icellchunk[idim*chunksize+igrid]==0 || j==header[i].nlevelmax-1) {
+				// Deal with positions
+				iz = idim/4;                  // z-position of the cell in the oct
+				iy = (idim - (4*iz))/2;       // y-position of the cell in the oct
+				ix = idim - (2*iy) - (4*iz);  // x-position of the cell in the oct
+				// cell centres are xc=(dble(ix)-0.5D0)*dx, same for yc and zc
+				// then, x=(xg(ind_grid_new(i),1)+xc(ind,1)-skip_loc(1))*scale
+				// here: (xtempchunk[igrid] + (double(ix)-0.5)*dx)*scale
+				// Added jitter should be (U(0,1)-0.5)*dx = U(0,1)*dx - 0.5*dx
+				// the boxsize is (?) already included in the "lscale" used later
+				// pos  = [ --------------- jitter -------------- ] + [ ------ grid centre ------ ] + [ position in oct ]
+				xpos[0] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+0*chunksize] + (double(ix)-0.5)*dx ;
+				xpos[1] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+1*chunksize] + (double(iy)-0.5)*dx ;
+				xpos[2] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+2*chunksize] + (double(iz)-0.5)*dx ;
+				
 #ifdef USEMPI
-                                            Pbuf[ibufindex]=Particle(mtemp*mscale,
-                                                xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
-                                                vpos[0]*opt.V+Hubbleflow*xpos[0],
-                                                vpos[1]*opt.V+Hubbleflow*xpos[1],
-                                                vpos[2]*opt.V+Hubbleflow*xpos[2],
-                                                count2,GASTYPE);
-                                            Pbuf[ibufindex].SetPID(idval);
-#ifdef GASON
-                                            Pbuf[ibufindex].SetU(utemp);
-                                            Pbuf[ibufindex].SetSPHDen(rhotemp);
-#ifdef STARON
-                                            Pbuf[ibufindex].SetZmet(Ztemp);
+				//CHECK: determine processor this particle belongs on based on its spatial position
+				ibuf=MPIGetParticlesProcessor(xpos[0],xpos[1],xpos[2]);
+				ibufindex=ibuf*BufSize+Nbuf[ibuf];
 #endif
-#endif
-#ifdef EXTRAINPUTINFO
-                                            if (opt.iextendedoutput)
-                                            {
-                                                Pbuf[ibufindex].SetInputFileID(i);
-                                                Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
-                                            }
-#endif
-                                            //ensure that store number of particles to be sent to the threads involved with reading snapshot files
-                                            Nbuf[ibuf]++;
-                                            MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+				// Deal with velocities
+				vpos[0] = hydrotempchunk[chunksize*(idim*header[i].nvarh + IDvx) + igrid];
+				vpos[1] = hydrotempchunk[chunksize*(idim*header[i].nvarh + IDvy) + igrid];
+				vpos[2] = hydrotempchunk[chunksize*(idim*header[i].nvarh + IDvz) + igrid];
+
+				// Density
+				rhotemp = hydrotempchunk[chunksize*(idim*header[i].nvarh + IDrho) + igrid];
+				// Mass
+				mtemp = rhotemp * dx*dx*dx;
+
+				// Internal energy (P/rho)
+				//TODO: check if should be divided by rho
+				utemp=hydrotempchunk[chunksize*(idim*header[i].nvarh + IDU) + igrid] / rhotemp / (header[i].gamma_index-1.0);
+
+				// Metallicity
+				//TODO: check if should be divided by rho
+				Ztemp=hydrotempchunk[chunksize*(idim*header[i].nvarh + IDZ) + igrid];
+
+				// Set density scale
+				rhotemp = rhotemp*rhoscale;
+
+				// Create particles
+				if (opt.partsearchtype==PSTALL) {
+				    // TODO: PSTGAS
+#ifdef USEMPI
+// 				    Pbuf[ibufindex]=Particle(mtemp*mscale,
+// 							     xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+// 							     vpos[0]*opt.V+Hubbleflow*xpos[0],
+// 							     vpos[1]*opt.V+Hubbleflow*xpos[1],
+// 							     vpos[2]*opt.V+Hubbleflow*xpos[2],
+// 							     count2,GASTYPE);
+// 				    Pbuf[ibufindex].SetPID(idval);
+// #ifdef GASON
+// 				    Pbuf[ibufindex].SetU(utemp);
+// 				    Pbuf[ibufindex].SetSPHDen(rhotemp);
+// #ifdef STARON
+// 				    Pbuf[ibufindex].SetZmet(Ztemp);
+// #endif
+// #endif
+// #ifdef EXTRAINPUTINFO
+// 				    if (opt.iextendedoutput)
+// 				    {
+// 					Pbuf[ibufindex].SetInputFileID(i);
+// 					Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+// 				    }
+// #endif
+// 				    //ensure that store number of particles to be sent to the threads involved with reading snapshot files
+// 				    Nbuf[ibuf]++;
+// 				    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
 #else
-                                            Part[count2]=Particle(mtemp*mscale,
-                                                xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
-                                                vpos[0]*opt.V+Hubbleflow*xpos[0],
-                                                vpos[1]*opt.V+Hubbleflow*xpos[1],
-                                                vpos[2]*opt.V+Hubbleflow*xpos[2],
-                                                count2,GASTYPE);
-                                            Part[count2].SetPID(idval);
+				    Part[count2]=Particle(mtemp*mscale,
+							  xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+							  vpos[0]*opt.V+Hubbleflow*xpos[0],
+							  vpos[1]*opt.V+Hubbleflow*xpos[1],
+							  vpos[2]*opt.V+Hubbleflow*xpos[2],
+							  count2,GASTYPE);
+				    Part[count2].SetPID(idval);
 #ifdef GASON
-                                            Part[count2].SetU(utemp);
-                                            Part[count2].SetSPHDen(rhotemp);
+				    Part[count2].SetU(utemp);
+				    Part[count2].SetSPHDen(rhotemp);
 #ifdef STARON
-                                            Part[count2].SetZmet(Ztemp);
+				    Part[count2].SetZmet(Ztemp);
 #endif
 #endif
 #ifdef EXTRAINPUTINFO
-                                            if (opt.iextendedoutput)
-                                            {
-                                                Part[count2].SetInputFileID(i);
-                                                Part[count2].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
-                                            }
+				    if (opt.iextendedoutput)
+				    {
+					Part[count2].SetInputFileID(i);
+					Part[count2].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+				    }
 #endif
-
+				    
 #endif
-                                            count2++;
-                                        }
-                                        else if (opt.partsearchtype==PSTDARK&&opt.iBaryonSearch) {
+				    count2++;
+				}
+				else if (opt.partsearchtype==PSTDARK&&opt.iBaryonSearch) {
 #ifdef USEMPI
-                                            Pbuf[ibufindex]=Particle(mtemp*mscale,
-                                                xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
-                                                vpos[0]*opt.V+Hubbleflow*xpos[0],
-                                                vpos[1]*opt.V+Hubbleflow*xpos[1],
-                                                vpos[2]*opt.V+Hubbleflow*xpos[2],
-                                                count2,GASTYPE);
-                                            Pbuf[ibufindex].SetPID(idval);
-#ifdef GASON
-                                            Pbuf[ibufindex].SetU(utemp);
-                                            Pbuf[ibufindex].SetSPHDen(rhotemp);
-#ifdef STARON
-                                            Pbuf[ibufindex].SetZmet(Ztemp);
-#endif
-#endif
-#ifdef EXTRAINPUTINFO
-                                            if (opt.iextendedoutput)
-                                            {
-                                                Pbuf[ibufindex].SetInputFileID(i);
-                                                Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
-                                            }
-#endif
-                                            //ensure that store number of particles to be sent to the reading threads
-                                            if (ibuf==ThisTask) {
-                                                Nlocalbaryon[1]++;
-                                            }
-                                            MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
+// 				    Pbuf[ibufindex]=Particle(mtemp*mscale,
+// 							     xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+// 							     vpos[0]*opt.V+Hubbleflow*xpos[0],
+// 							     vpos[1]*opt.V+Hubbleflow*xpos[1],
+// 							     vpos[2]*opt.V+Hubbleflow*xpos[2],
+// 							     bcount2,GASTYPE); //count2 -> bcount2
+// 				    Pbuf[ibufindex].SetPID(idval);
+// #ifdef GASON
+// 				    Pbuf[ibufindex].SetU(utemp);
+// 				    Pbuf[ibufindex].SetSPHDen(rhotemp);
+// #ifdef STARON
+// 				    Pbuf[ibufindex].SetZmet(Ztemp);
+// #endif
+// #endif
+// #ifdef EXTRAINPUTINFO
+// 				    if (opt.iextendedoutput)
+// 				    {
+// 					Pbuf[ibufindex].SetInputFileID(i);
+// 					Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+// 				    }
+// #endif
+// 				    //ensure that store number of particles to be sent to the reading threads
+// 				    if (ibuf==ThisTask) {
+// 					Nlocalbaryon[1]++;
+// 				    }
+// 				    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
 #else
-                                            Pbaryons[bcount2]=Particle(mtemp*mscale,
-                                                xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
-                                                vpos[0]*opt.V+Hubbleflow*xpos[0],
-                                                vpos[1]*opt.V+Hubbleflow*xpos[1],
-                                                vpos[2]*opt.V+Hubbleflow*xpos[2],
-                                                count2,GASTYPE);
-                                            Pbaryons[bcount2].SetPID(idval);
+				    Pbaryons[bcount2]=Particle(mtemp*mscale,
+							       xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+							       vpos[0]*opt.V+Hubbleflow*xpos[0],
+							       vpos[1]*opt.V+Hubbleflow*xpos[1],
+							       vpos[2]*opt.V+Hubbleflow*xpos[2],
+							       bcount2,GASTYPE);  // count2 -> bcount2
+				    Pbaryons[bcount2].SetPID(idval); // WEIRD, but not the probelem...
 #ifdef GASON
-                                            Pbaryons[bcount2].SetU(utemp);
-                                            Pbaryons[bcount2].SetSPHDen(rhotemp);
+				    Pbaryons[bcount2].SetU(utemp);
+				    Pbaryons[bcount2].SetSPHDen(rhotemp);
 #ifdef STARON
-                                            Pbaryons[bcount2].SetZmet(Ztemp);
+				    Pbaryons[bcount2].SetZmet(Ztemp);
 #endif
 #endif
 #ifdef EXTRAINPUTINFO
-                                            if (opt.iextendedoutput)
-                                            {
-                                                Pbaryons[bcount2].SetInputFileID(i);
-                                                Pbaryons[bcount2].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
-                                            }
+				    if (opt.iextendedoutput)
+				    {
+					Pbaryons[bcount2].SetInputFileID(i);
+					Pbaryons[bcount2].SetInputIndexInFile(chunksize*(idim*header[i].nvarh + IDrho) + igrid +ninputoffset);
+				    }
 #endif
+				    
+#endif
+				    bcount2++;
+				}
 
-#endif
-                                        bcount2++;
-                                    }
-                                }
-                                }
-                            }
-                        }
-                    }
-                }
-                if (chunksize>0) {
+			    } // leaf cells
+			} // loop over cells in the chunk
+		    } // loop over cells in octs (per dimension)
+
+		} // chunksize > 0
+		
+		if (chunksize>0) {
                     delete[] xtempchunk;
                     delete[] hydrotempchunk;
-                }
-            }
-        }
-        Famr[i].close();
+		    delete[] icellchunk;
+		}
+		
+	    } // loop on ncpu+nboudary
+	} // loop on levels
+	Famr[i].close();
+	Fhydro[i].close();
+
 #ifdef USEMPI
         //send information between read threads
         if (opt.nsnapread>1&&inreadsend<totreadsend){
@@ -1191,7 +1313,200 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
             for(ibuf = 0; ibuf < opt.nsnapread; ibuf++) Nreadbuf[ibuf]=0;
         }
 #endif
-    }
+	} // loop on files, if read
+    
+
+
+//         for (k=0;k<header[i].nboundary+1;k++) {
+//             for (j=0;j<header[i].nlevelmax;j++) {
+//                 // //first read amr for positions
+//                 // chunksize=nchunk=ngridfile[k*header[i].nlevelmax+j];
+//                 // if (chunksize>0) {
+//                 //     xtempchunk=new RAMSESFLOAT[3*chunksize];
+//                 //     //store son value in icell
+//                 //     icellchunk=new int[header[i].twotondim*chunksize];
+//                 //     //skip grid index, next index and prev index.
+//                 //     RAMSES_fortran_skip(Famr[i],3);
+//                 //     //now read grid centre
+//                 //     for (idim=0;idim<header[i].ndim;idim++) {
+//                 //         RAMSES_fortran_read(Famr[i],&xtempchunk[idim*chunksize]);
+//                 //     }
+//                 //     //skip father index, then neighbours index
+//                 //     RAMSES_fortran_skip(Famr[i],1+2*header[i].ndim);
+//                 //     //read son index to determine if a cell in a specific grid is at the highest resolution and needs to be represented by a particle
+//                 //     for (idim=0;idim<header[i].twotondim;idim++) {
+//                 //         RAMSES_fortran_read(Famr[i],&icellchunk[idim*chunksize]);
+//                 //     }
+//                 //     //skip cpu map and refinement map (2^ndim*2)
+//                 //     RAMSES_fortran_skip(Famr[i],2*header[i].twotondim);
+//                 // }
+//                 // RAMSES_fortran_skip(Fhydro[i]);
+//                 //then read hydro for other variables (first is density, then velocity, then pressure, then metallicity )
+//                 if (chunksize>0) {
+//                     hydrotempchunk=new RAMSESFLOAT[chunksize*header[i].twotondim*header[i].nvarh];
+//                     //first read velocities (for 2 cells per number of dimensions (ie: cell corners?))
+//                     for (idim=0;idim<header[i].twotondim;idim++) {
+//                         for (ivar=0;ivar<header[i].nvarh;ivar++) {
+//                             RAMSES_fortran_read(Fhydro[i],&hydrotempchunk[idim*chunksize*header[i].nvarh+ivar*chunksize]);
+//                             for (igrid=0;igrid<chunksize;igrid++) {
+//                                 //once we have looped over all the hydro data then can start actually storing it into the particle structures
+//                                 if (ivar==header[i].nvarh-1) {
+//                                     //if cell has no internal cells or at maximum level produce a particle
+//                                     if (icellchunk[idim*chunksize+igrid]==0 || j==header[i].nlevelmax-1) {
+// //                                         //first suggestion is to add some jitter to the particle positions
+// //                                         double dx = pow(0.5, j);
+// //                                         int ix, iy, iz;
+// //                                         //below assumes three dimensions with 8 corners (? maybe cells) per grid
+// //                                         iz = idim/4;
+// //                                         iy = (idim - (4*iz))/2;
+// //                                         ix = idim - (2*iy) - (4*iz);
+// //                                         // Calculate absolute coordinates + jitter, and generate particle
+// //                                         xpos[0] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid] + (double(ix)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
+// //                                         xpos[1] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid+1*chunksize] + (double(iy)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
+// //                                         xpos[2] = ((((float)rand()/(float)RAND_MAX) * header[i].BoxSize * dx) +(header[i].BoxSize * (xtempchunk[igrid+2*chunksize] + (double(iz)-0.5) * dx )) - (header[i].BoxSize*dx/2.0)) ;
+// // #ifdef USEMPI
+// //                                         //determine processor this particle belongs on based on its spatial position
+// //                                         ibuf=MPIGetParticlesProcessor(xpos[0],xpos[1],xpos[2]);
+// //                                         ibufindex=ibuf*BufSize+Nbuf[ibuf];
+// // #endif
+
+// //                                         vpos[0]=hydrotempchunk[idim*chunksize*header[i].nvarh+1*chunksize+igrid];
+// //                                         vpos[1]=hydrotempchunk[idim*chunksize*header[i].nvarh+2*chunksize+igrid];
+// //                                         vpos[2]=hydrotempchunk[idim*chunksize*header[i].nvarh+3*chunksize+igrid];
+// //                                         mtemp=dx*dx*dx*hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid];
+// //                                         //the self energy P/rho is given by
+// //                                         utemp=hydrotempchunk[idim*chunksize*header[i].nvarh+4*chunksize+igrid]/hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]/(header[i].gamma_index-1.0);
+// //                                         rhotemp=hydrotempchunk[idim*chunksize*header[i].nvarh+0*chunksize+igrid]*rhoscale;
+// //                                         Ztemp=hydrotempchunk[idim*chunksize*header[i].nvarh+5*chunksize+igrid];
+//                                         if (opt.partsearchtype==PSTALL) {
+// // #ifdef USEMPI
+// //                                             Pbuf[ibufindex]=Particle(mtemp*mscale,
+// //                                                 xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+// //                                                 vpos[0]*opt.V+Hubbleflow*xpos[0],
+// //                                                 vpos[1]*opt.V+Hubbleflow*xpos[1],
+// //                                                 vpos[2]*opt.V+Hubbleflow*xpos[2],
+// //                                                 count2,GASTYPE);
+// //                                             Pbuf[ibufindex].SetPID(idval);
+// // #ifdef GASON
+// //                                             Pbuf[ibufindex].SetU(utemp);
+// //                                             Pbuf[ibufindex].SetSPHDen(rhotemp);
+// // #ifdef STARON
+// //                                             Pbuf[ibufindex].SetZmet(Ztemp);
+// // #endif
+// // #endif
+// // #ifdef EXTRAINPUTINFO
+// //                                             if (opt.iextendedoutput)
+// //                                             {
+// //                                                 Pbuf[ibufindex].SetInputFileID(i);
+// //                                                 Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+// //                                             }
+// // #endif
+// //                                             //ensure that store number of particles to be sent to the threads involved with reading snapshot files
+// //                                             Nbuf[ibuf]++;
+// //                                             MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+// // #else
+// //                                             Part[count2]=Particle(mtemp*mscale,
+// //                                                 xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+// //                                                 vpos[0]*opt.V+Hubbleflow*xpos[0],
+// //                                                 vpos[1]*opt.V+Hubbleflow*xpos[1],
+// //                                                 vpos[2]*opt.V+Hubbleflow*xpos[2],
+// //                                                 count2,GASTYPE);
+// //                                             Part[count2].SetPID(idval);
+// // #ifdef GASON
+// //                                             Part[count2].SetU(utemp);
+// //                                             Part[count2].SetSPHDen(rhotemp);
+// // #ifdef STARON
+// //                                             Part[count2].SetZmet(Ztemp);
+// // #endif
+// // #endif
+// // #ifdef EXTRAINPUTINFO
+// //                                             if (opt.iextendedoutput)
+// //                                             {
+// //                                                 Part[count2].SetInputFileID(i);
+// //                                                 Part[count2].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+// //                                             }
+// // #endif
+
+// // #endif
+// //                                             count2++;
+//                                         }
+//                                         else if (opt.partsearchtype==PSTDARK&&opt.iBaryonSearch) {
+// #ifdef USEMPI
+//                                             Pbuf[ibufindex]=Particle(mtemp*mscale,
+//                                                 xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+//                                                 vpos[0]*opt.V+Hubbleflow*xpos[0],
+//                                                 vpos[1]*opt.V+Hubbleflow*xpos[1],
+//                                                 vpos[2]*opt.V+Hubbleflow*xpos[2],
+//                                                 count2,GASTYPE);
+//                                             Pbuf[ibufindex].SetPID(idval);
+// #ifdef GASON
+//                                             Pbuf[ibufindex].SetU(utemp);
+//                                             Pbuf[ibufindex].SetSPHDen(rhotemp);
+// #ifdef STARON
+//                                             Pbuf[ibufindex].SetZmet(Ztemp);
+// #endif
+// #endif
+// #ifdef EXTRAINPUTINFO
+//                                             if (opt.iextendedoutput)
+//                                             {
+//                                                 Pbuf[ibufindex].SetInputFileID(i);
+//                                                 Pbuf[ibufindex].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+//                                             }
+// #endif
+//                                             //ensure that store number of particles to be sent to the reading threads
+//                                             if (ibuf==ThisTask) {
+//                                                 Nlocalbaryon[1]++;
+//                                             }
+//                                             MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
+// #else
+//                                             Pbaryons[bcount2]=Particle(mtemp*mscale,
+//                                                 xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
+//                                                 vpos[0]*opt.V+Hubbleflow*xpos[0],
+//                                                 vpos[1]*opt.V+Hubbleflow*xpos[1],
+//                                                 vpos[2]*opt.V+Hubbleflow*xpos[2],
+//                                                 count2,GASTYPE);
+//                                             Pbaryons[bcount2].SetPID(idval);
+// #ifdef GASON
+//                                             Pbaryons[bcount2].SetU(utemp);
+//                                             Pbaryons[bcount2].SetSPHDen(rhotemp);
+// #ifdef STARON
+//                                             Pbaryons[bcount2].SetZmet(Ztemp);
+// #endif
+// #endif
+// #ifdef EXTRAINPUTINFO
+//                                             if (opt.iextendedoutput)
+//                                             {
+//                                                 Pbaryons[bcount2].SetInputFileID(i);
+//                                                 Pbaryons[bcount2].SetInputIndexInFile(idim*chunksize*header[i].nvarh+0*chunksize+igrid+ninputoffset);
+//                                             }
+// #endif
+
+// #endif
+//                                         bcount2++;
+//                                     }
+//                                 }
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//                 if (chunksize>0) {
+//                     delete[] xtempchunk;
+//                     delete[] hydrotempchunk;
+//                 }
+//             }
+//         }
+//         Famr[i].close();
+// #ifdef USEMPI
+//         //send information between read threads
+//         if (opt.nsnapread>1&&inreadsend<totreadsend){
+//             MPI_Allgather(Nreadbuf, opt.nsnapread, MPI_Int_t, mpi_nsend_readthread, opt.nsnapread, MPI_Int_t, mpi_comm_read);
+//             MPISendParticlesBetweenReadThreads(opt, Preadbuf, Part.data(), ireadtask, readtaskID, Pbaryons, mpi_comm_read, mpi_nsend_readthread, mpi_nsend_readthread_baryon);
+//             inreadsend++;
+//             for(ibuf = 0; ibuf < opt.nsnapread; ibuf++) Nreadbuf[ibuf]=0;
+//         }
+// #endif
+//     }
 #ifdef USEMPI
     //once finished reading the file if there are any particles left in the buffer broadcast them
     for(ibuf = 0; ibuf < NProcs; ibuf++) if (ireadtask[ibuf]<0)
