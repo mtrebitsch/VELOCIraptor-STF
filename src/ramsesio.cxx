@@ -16,11 +16,9 @@
  */
 
 /* TODO MT (not in order):
-   - MPI / OpenMP
+   - MPI
    - Read BH
-   - stellar metallicity
-   - stellar ages (if possible?)
-   - temperature (we have internal energy, maybe not necessary)
+   - convert stellar birth_time in ages (if possible?)
    - zoom things
 
    NOTES:
@@ -709,6 +707,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 			mtemp=1.0;
 #endif
 			ageval = agetempchunk[nn];
+			metval = mettempchunk[nn];
 			if (typechunk[nn] == 1) typeval = DARKTYPE;
 			else if (typechunk[nn] == 2) typeval = STARTYPE;
 			else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
@@ -724,12 +723,12 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 			Pbuf[ibufindex].SetU(0);
 #ifdef STARON
 			Pbuf[ibufindex].SetSFR(0);
-			Pbuf[ibufindex].SetZmet(0);
+			Pbuf[ibufindex].SetZmet(metval);
 #endif
 #endif
 #ifdef STARON
-			Pbuf[ibufindex].SetZmet(0);
-			Pbuf[ibufindex].SetTage(0);
+			Pbuf[ibufindex].SetZmet(metval);
+			Pbuf[ibufindex].SetTage(ageval); // careful, this is in weird units
 #endif
 #ifdef BHON
 #endif
