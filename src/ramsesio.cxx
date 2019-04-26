@@ -17,12 +17,14 @@
 
 /* TODO MT (not in order):
    - MPI / OpenMP
-   - PSTGAS
    - Read BH
    - stellar metallicity
    - stellar ages (if possible?)
    - temperature (we have internal energy, maybe not necessary)
    - zoom things
+
+   NOTES:
+   - the ids are not unique: a star and a DM particle can share an ID...
 */
 
 //-- RAMSES SPECIFIC IO
@@ -396,7 +398,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     int intbuff[NRAMSESTYPE];
     long long longbuff[NRAMSESTYPE];
     int i,j,k,n,idim,ivar,igrid,ireaderror=0;
-    Int_t count2,bcount2;
+    Int_t count2,bcount2,gascount;
     //IntType inttype;
     int dummy,byteoffset;
     Double_t MP_DM=MAXVALUE,LN,N_DM,MP_B=0;
@@ -943,6 +945,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     }
 
     //if gas searched in some fashion then load amr/hydro data
+    gascount=0;
     if (opt.partsearchtype==PSTGAS||opt.partsearchtype==PSTALL||(opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
 #ifdef USEMPI
     if (ireadtask[ThisTask]>=0) {
@@ -1180,7 +1183,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				rhotemp = rhotemp*rhoscale;
 
 				// Create particles
-				if (opt.partsearchtype==PSTALL) {
+				if (opt.partsearchtype==PSTALL || opt.partsearchtype==PSTGAS) {
 				    // TODO: PSTGAS
 #ifdef USEMPI
 // 				    Pbuf[ibufindex]=Particle(mtemp*mscale,
@@ -1214,7 +1217,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							  vpos[1]*opt.V+Hubbleflow*xpos[1],
 							  vpos[2]*opt.V+Hubbleflow*xpos[2],
 							  count2,GASTYPE);
-				    Part[count2].SetPID(idval);
+				    // Stupid counter for the gas particles (idval -> gascount)
+				    Part[count2].SetPID(gascount);
 #ifdef GASON
 				    Part[count2].SetU(utemp);
 				    Part[count2].SetSPHDen(rhotemp);
@@ -1232,6 +1236,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				    
 #endif
 				    count2++;
+				    gascount++;
 				}
 				else if (opt.partsearchtype==PSTDARK&&opt.iBaryonSearch) {
 #ifdef USEMPI
@@ -1268,7 +1273,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							       vpos[1]*opt.V+Hubbleflow*xpos[1],
 							       vpos[2]*opt.V+Hubbleflow*xpos[2],
 							       bcount2,GASTYPE);  // count2 -> bcount2
-				    Pbaryons[bcount2].SetPID(idval); // WEIRD, but not the probelem...
+				    // Stupid counter for the gas particles (idval -> gascount)
+				    Pbaryons[bcount2].SetPID(gascount);
 #ifdef GASON
 				    Pbaryons[bcount2].SetU(utemp);
 				    Pbaryons[bcount2].SetSPHDen(rhotemp);
@@ -1286,6 +1292,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				    
 #endif
 				    bcount2++;
+				    gascount++;
 				}
 
 			    } // leaf cells
