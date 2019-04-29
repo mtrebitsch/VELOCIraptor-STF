@@ -393,6 +393,9 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     fstream *Famr;
     fstream *Fhydro;
     fstream *Fpart;
+#ifdef BHON
+    fstream Fsink;  // There will be only one of these
+#endif
     RAMSES_Header *header;
     int intbuff[NRAMSESTYPE];
     long long longbuff[NRAMSESTYPE];
@@ -601,7 +604,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 
     //if not only gas being searched open particle data
     count2=bcount2=0;
-    if (opt.partsearchtype!=PSTGAS) {
+    if (opt.partsearchtype!=PSTGAS && opt.partsearchtype!=PSTBH) {
 #ifdef USEMPI
 	if (ireadtask[ThisTask]>=0) {
 	    inreadsend=0;
@@ -935,6 +938,219 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     }
 #endif
     }
+
+#ifdef BHON
+    //Read the first sink file, as all of the are identical
+    sprintf(buf1,"%s/sink_%s.out00001",opt.fname,opt.ramsessnapname);
+    Fsink.open(buf1, ios::binary|ios::in);
+
+    // List existing sink fields from sink_file_descriptor.txt
+    vector< array<string, 2> > sinkfields;
+    sprintf(buf1,"%s/sink_file_descriptor.txt", opt.fname);
+    sinkfields = RAMSES_read_descriptor(buf1);
+
+    // Skip header: nsink and nindsink
+    RAMSES_fortran_skip(Fsink, 2);
+
+    /* Read relevant variables:
+       - "identity"   -> sink ID
+       - "mass"       -> sink mass
+       - "position_x" -> position (same with y and z)
+       - "velocity_x" -> velocity (same with y and z)
+       - "birth_time" -> time of formation
+    */
+    nchunk = opt.numpart[BHTYPE];
+    xtempchunk   = new RAMSESFLOAT  [3*nchunk];
+    vtempchunk   = new RAMSESFLOAT  [3*nchunk];
+    mtempchunk   = new RAMSESFLOAT  [nchunk];
+    idvalchunk   = new RAMSESIDTYPE [nchunk];
+    agetempchunk = new RAMSESFLOAT  [nchunk];
+
+    for (j=0;j<sinkfields.size();++j)
+    {
+	// The order should not be important, since we skip the fields we do not read
+	if      (sinkfields[j][0] == "identity")    {RAMSES_fortran_read(Fsink,idvalchunk)           ;}
+	else if (sinkfields[j][0] == "mass")        {RAMSES_fortran_read(Fsink,mtempchunk)           ;}
+	else if (sinkfields[j][0] == "position_x")  {RAMSES_fortran_read(Fsink,&xtempchunk[0*nchunk]);}
+	else if (sinkfields[j][0] == "position_y")  {RAMSES_fortran_read(Fsink,&xtempchunk[1*nchunk]);}
+	else if (sinkfields[j][0] == "position_z")  {RAMSES_fortran_read(Fsink,&xtempchunk[2*nchunk]);}
+	else if (sinkfields[j][0] == "velocity_x")  {RAMSES_fortran_read(Fsink,&vtempchunk[0*nchunk]);}
+	else if (sinkfields[j][0] == "velocity_y")  {RAMSES_fortran_read(Fsink,&vtempchunk[1*nchunk]);}
+	else if (sinkfields[j][0] == "velocity_z")  {RAMSES_fortran_read(Fsink,&vtempchunk[2*nchunk]);}
+	else if (sinkfields[j][0] == "birth_time")  {RAMSES_fortran_read(Fsink,agetempchunk)         ;}
+	else {RAMSES_fortran_skip(Fsink);}
+    }
+    Fsink.close();
+
+    // Finally create particles
+    for (int nn=0;nn<nchunk;nn++) {
+	xtemp[0] = xtempchunk[nn];
+	xtemp[1] = xtempchunk[nn+nchunk];
+	xtemp[2] = xtempchunk[nn+2*nchunk];
+	
+	vtemp[0] = vtempchunk[nn];
+	vtemp[1] = vtempchunk[nn+nchunk];
+	vtemp[2] = vtempchunk[nn+2*nchunk];
+	
+	idval = idvalchunk[nn];
+	
+#ifndef NOMASS
+	mtemp=mtempchunk[nn];
+#else
+	mtemp=1.0;
+#endif
+	ageval = agetempchunk[nn];
+		
+#ifdef USEMPI
+			// //determine processor this particle belongs on based on its spatial position
+			// ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
+			// ibufindex=ibuf*BufSize+Nbuf[ibuf];
+#endif
+			//reset hydro quantities of buffer
+#ifdef USEMPI
+// #ifdef GASON
+// 			Pbuf[ibufindex].SetU(0);
+// #ifdef STARON
+// 			Pbuf[ibufindex].SetSFR(0);
+// 			Pbuf[ibufindex].SetZmet(0);
+// #endif
+// #endif
+// #ifdef STARON
+// 			Pbuf[ibufindex].SetZmet(0);
+// 			Pbuf[ibufindex].SetTage(ageval); // careful, this is in weird units
+// #endif
+#endif
+
+	if (opt.partsearchtype==PSTALL) {
+#ifdef USEMPI
+// 	    Pbuf[ibufindex]=Particle(mtemp*mscale,xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+// 				     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+// 				     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+// 				     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+// 				     count2,typeval);
+// 	    Pbuf[ibufindex].SetPID(idval);
+// #ifdef EXTRAINPUTINFO
+// 	    if (opt.iextendedoutput)
+// 	    {
+// 		Part[ibufindex].SetInputFileID(i);
+// 		Part[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+// 	    }
+// #endif
+// 	    Nbuf[ibuf]++;
+// 	    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+#else
+	    Part[count2]=Particle(mtemp*mscale,
+				  xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+				  vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+				  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+				  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+				  count2,BHTYPE);
+	    Part[count2].SetPID(idval);
+#ifdef EXTRAINPUTINFO
+	    if (opt.iextendedoutput)
+	    {
+		Part[count2].SetInputFileID(1);
+		Part[count2].SetInputIndexInFile(nn+ninputoffset);
+	    }
+#endif
+#endif
+	    count2++;
+	}
+	else if (opt.partsearchtype==PSTDARK && opt.iBaryonSearch) {
+#ifdef USEMPI
+// 	    Pbuf[ibufindex]=Particle(mtemp*mscale,
+// 				     xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+// 				     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+// 				     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+// 				     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+// 				     bcount2);  //count2 -> bcount2?
+// 	    Pbuf[ibufindex].SetPID(idval);
+// #ifdef EXTRAINPUTINFO
+// 	    if (opt.iextendedoutput)
+// 	    {
+// 		Pbuf[ibufindex].SetInputFileID(1);
+// 		Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+// 	    }
+// #endif
+// 	    if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
+// 	    else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
+// 	    //ensure that store number of particles to be sent to the reading threads
+// 	    Nbuf[ibuf]++;
+// 	    if (ibuf==ThisTask) {
+// 		if (k==RAMSESSTARTYPE) Nlocalbaryon[2]++;
+// 		else if (k==RAMSESSINKTYPE) Nlocalbaryon[3]++;
+// 	    }
+// 	    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
+#else
+	    Pbaryons[bcount2]=Particle(mtemp*mscale,
+				       xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+				       vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+				       vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+				       vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+				       bcount2,BHTYPE);
+	    Pbaryons[bcount2].SetPID(idval);
+#ifdef EXTRAINPUTINFO
+	    if (opt.iextendedoutput)
+	    {
+		Part[bcount2].SetInputFileID(1);
+		Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+	    }
+#endif
+#endif
+	    bcount2++;
+	}
+	else if (opt.partsearchtype==PSTBH) {
+#ifdef USEMPI
+// 	    //if using MPI, determine proccessor and place in ibuf, store particle in particle buffer and if buffer full, broadcast data
+// 	    //unless ibuf is 0, then just store locally
+// 	    Pbuf[ibufindex]=Particle(mtemp*mscale,
+// 				     xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+// 				     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+// 				     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+// 				     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+// 				     count2,STARTYPE);
+// 	    //ensure that store number of particles to be sent to the reading threads
+// 	    Pbuf[ibufindex].SetPID(idval);
+// #ifdef EXTRAINPUTINFO
+// 	    if (opt.iextendedoutput)
+// 	    {
+// 		Pbuf[ibufindex].SetInputFileID(1);
+// 		Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
+// 	    }
+// #endif
+// 	    Nbuf[ibuf]++;
+// 	    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
+#else
+	    Part[count2]=Particle(mtemp*mscale,
+				  xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
+				  vtemp[0]*opt.V+Hubbleflow*xtemp[0],
+				  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
+				  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
+				  count2,BHTYPE);
+	    Part[count2].SetPID(idval);
+#ifdef EXTRAINPUTINFO
+	    if (opt.iextendedoutput)
+	    {
+		Part[count2].SetInputFileID(1);
+		Part[count2].SetInputIndexInFile(nn+ninputoffset);
+	    }
+#endif
+#endif
+	    count2++;
+	} // end of various case searches
+    } // end loop over particles
+    
+    delete[] xtempchunk;
+    delete[] vtempchunk;
+    delete[] mtempchunk;
+    delete[] idvalchunk;
+    delete[] agetempchunk;
+
+
+    // Need to deal with MPI exchanges as for the regular particles
+#endif
+
+    
 
     //if gas searched in some fashion then load amr/hydro data
     gascount=0;
@@ -1543,8 +1759,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     opt.zoomlowmassdm=MP_DM*mscale * (1.0001);  // Add small offset ("a la HaloMaker")
     cout<<"Lowest DM particle mass: "<<opt.zoomlowmassdm<<" Msun"<<endl;
 
-    // TODO: check if this makes sense
-    // TODO: push this in get_nbodies?
     if (opt.Neff==-1) {
 	if  (opt.partsearchtype==PSTDARK||opt.partsearchtype==PSTALL) {
 	    // Ideally, we would want this to be the "min level of the high res region"
@@ -1561,6 +1775,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 	LN   = (lscale/(double)opt.Neff);
     }
 #endif
+    // SHOULD'NT THE DEFAULT LN BE LEVELMIN?
     opt.ellxscale = LN;
     opt.uinfo.eps*=LN;
 
