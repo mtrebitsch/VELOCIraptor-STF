@@ -99,7 +99,7 @@ int RAMSES_fortran_read(fstream &, RAMSESIDTYPE *);
 int RAMSES_fortran_read(fstream &, char *);
 int RAMSES_fortran_skip(fstream &, int nskips=1);
 
-vector< array<string,2> > RAMSES_read_descriptor(char *bufname);
+vector<string> RAMSES_read_descriptor(char *bufname);
 
 /// \name Get the number of particles in the ramses files
 //@{
