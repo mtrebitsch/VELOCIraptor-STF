@@ -671,10 +671,11 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 		// Finally create particle
 		for (int nn=0;nn<nchunk;nn++)
 		{
-		    if ((typechunk[nn] != 1) && (agetempchunk[nn] == 0.0))
+		    if ((typechunk[nn] != 1) && (typechunk[nn] != 2))
 		    {
 			//  GHOST PARTICLE!!!
-			// this is not a DM particle, and yet it has age == 0.
+			// Basically, neither star nor DM: can be cloud, dust, whatever
+			// used to be: ((typechunk[nn] != 1) && (agetempchunk[nn] == 0.0))
 			// MT: this could be a cloud particle (which should? have type == 3)
 			// MT: FIXME BH
 		    }
@@ -966,6 +967,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     idvalchunk   = new RAMSESIDTYPE [nchunk];
     agetempchunk = new RAMSESFLOAT  [nchunk];
 
+    if (opt.iverbose) cout<<ThisTask<<" Reading "<<nchunk<<" sinks  ... "<<endl;
     for (j=0;j<sinkfields.size();++j)
     {
 	// The order should not be important, since we skip the fields we do not read
