@@ -19,10 +19,12 @@
    - MPI
    - Read BH
    - convert stellar birth_time in ages (if possible?)
-   - zoom things
+   - zoom with refinement scalar (only count gas cells above a given threshold?)
+   - period and comoving coordinates
 
    NOTES:
    - the ids are not unique: a star and a DM particle can share an ID...
+   - Ref scalar: either read in get_nbodies (ugly) or resize after ReadData
 */
 
 //-- RAMSES SPECIFIC IO
@@ -128,7 +130,6 @@ Int_t RAMSES_get_nbodies(char *fname, int ptype, Options &opt)
     char buf[2000],buf1[2000],buf2[2000];
     double * dummy_age, * dummy_mass;
     char * dummy_type;
-    double dmp_mass;
     double OmegaM, OmegaB;
     int totalghost = 0;
     int totalstars = 0;
@@ -399,7 +400,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     Int_t count2,bcount2,gascount;
     //IntType inttype;
     int dummy,byteoffset;
-    Double_t MP_DM=MAXVALUE,LN,N_DM,MP_B=0;
+    Double_t MP_DM=MAXVALUE,LN=1.0,N_DM,MP_B=0;
     double z,aadjust,Hubble,Hubbleflow;
     Double_t mscale,lscale,lvscale,rhoscale;
     Double_t mtemp,utemp,rhotemp,Ztemp,Ttemp;
@@ -411,7 +412,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     int *ngridlevel,*ngridbound,*ngridfile;
     int *ncache, *numbl, *numbb;
     int lmin=1000000,lmax=0;
-    double dmp_mass;
 
     int ninputoffset = 0;
     int ifirstfile=0,*ireadfile,ibuf=0;
@@ -585,9 +585,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     //NOTE: this assumes a uniform box resolution. However this is not used in the rest of this function
     N_DM = opt.Neff*opt.Neff*opt.Neff;
 
-    //interparticle spacing (assuming a uniform resolution box)
-    LN   = (lscale/(double)opt.Neff);
-    opt.ellxscale = LN;
 
     //grab from the first particle file the dimensions of the arrays and also the number of cpus (should be number of files)
     sprintf(buf1,"%s/part_%s.out00001",opt.fname,opt.ramsessnapname);
@@ -602,15 +599,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     }
 #endif
 
-#ifdef USEMPI
-    if (ireadtask[ThisTask]>=0)
-    {
-#endif
-      dmp_mass = 1.0 / (opt.Neff*opt.Neff*opt.Neff) * opt.Omega_cdm / opt.Omega_m;
-#ifdef USEMPI
-    }
-    MPI_Bcast (&dmp_mass, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-#endif
     //if not only gas being searched open particle data
     count2=bcount2=0;
     if (opt.partsearchtype!=PSTGAS) {
@@ -711,6 +699,11 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 			if (typechunk[nn] == 1) typeval = DARKTYPE;
 			else if (typechunk[nn] == 2) typeval = STARTYPE;
 			else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
+#ifdef HIGHRES
+                        // For high-res simulation, find mass of highres DM particles
+                        if (mtemp>0 && mtemp < MP_DM && typeval==DARKTYPE) MP_DM=mtemp;
+#endif
+
 		
 #ifdef USEMPI
 			//determine processor this particle belongs on based on its spatial position
@@ -1541,10 +1534,35 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     }//end of check if gas loaded
 
     //update info
+    //in gadgetio.cxx: opt.a/opt.h if not comove, otherwise /opt.h
+    // by default, opt.p is boxsize, expressed in kpc/h
+    // FIXME: check what should be used.
     opt.p*=opt.a/opt.h;
+
 #ifdef HIGHRES
-    opt.zoomlowmassdm=MP_DM*mscale;
+    opt.zoomlowmassdm=MP_DM*mscale * (1.0001);  // Add small offset ("a la HaloMaker")
+    cout<<"Lowest DM particle mass: "<<opt.zoomlowmassdm<<" Msun"<<endl;
+
+    // TODO: check if this makes sense
+    // TODO: push this in get_nbodies?
+    if (opt.Neff==-1) {
+	if  (opt.partsearchtype==PSTDARK||opt.partsearchtype==PSTALL) {
+	    // Ideally, we would want this to be the "min level of the high res region"
+	    // This can be inferred from (total_DM_mass/smallest_DM_mass)**(1./3.)
+	    // luckily, this is (1./MP_DM)**(1./3.) in code units, with a factor Om/Ocdm
+	    LN = lscale * pow(MP_DM*opt.Omega_m/opt.Omega_cdm, 1./3.);
+	}
+	else {
+	    // not looking for DM particles: we use levelmax information
+	    LN   = (lscale/pow(2.0, header[ifirstfile].nlevelmax));
+	}
+    }
+    else {
+	LN   = (lscale/(double)opt.Neff);
+    }
 #endif
+    opt.ellxscale = LN;
+    opt.uinfo.eps*=LN;
 
 #ifdef USEMPI
     MPI_Barrier(MPI_COMM_WORLD);
