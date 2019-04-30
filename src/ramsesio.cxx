@@ -16,11 +16,11 @@
  */
 
 /* TODO MT (not in order):
-   - MPI
-   - Read BH  -> compiles
+   - MPI with baryons [this has something to do with mpi_nsend_readthread_baryon not being initialized]
+   - Read BH  -> compiles, seems to work
    - convert stellar birth_time in ages (if possible?)
    - zoom with refinement scalar (only count gas cells above a given threshold?)
-   - period and comoving coordinates
+   - period and comoving coordinates (not relevant?)
    - check what ninputoffset and inputoffsetinfile are
 
    NOTES:
@@ -840,7 +840,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				    else if (typeval==BHTYPE) Nlocalbaryon[3]++;
 				}
 				MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
-				//SOMETHING UNINITIALIZED ON PREV LINE
 #else
 				Pbaryons[bcount2]=Particle(mtemp*mscale,
 							   xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
@@ -918,8 +917,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 		//send information between read threads
 		if (opt.nsnapread>1&&inreadsend<totreadsend){
 		    MPI_Allgather(Nreadbuf, opt.nsnapread, MPI_Int_t, mpi_nsend_readthread, opt.nsnapread, MPI_Int_t, mpi_comm_read);
+		    // There should be something similar here for mpi_nsend_readthread_baryon, which is NOT initialized so far: next has an issue because of that
 		    MPISendParticlesBetweenReadThreads(opt, Preadbuf, Part.data(), ireadtask, readtaskID, Pbaryons, mpi_comm_read, mpi_nsend_readthread, mpi_nsend_readthread_baryon);
-		    // PREVIOUS LINE: SOMETHINK UNINITIALIZED...
 		    inreadsend++;
 		    for(ibuf = 0; ibuf < opt.nsnapread; ibuf++) Nreadbuf[ibuf]=0;
 		}
@@ -941,7 +940,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     if (opt.nsnapread>1){
         MPI_Allgather(Nreadbuf, opt.nsnapread, MPI_Int_t, mpi_nsend_readthread, opt.nsnapread, MPI_Int_t, mpi_comm_read);
         MPISendParticlesBetweenReadThreads(opt, Preadbuf, Part.data(), ireadtask, readtaskID, Pbaryons, mpi_comm_read, mpi_nsend_readthread, mpi_nsend_readthread_baryon);
-	// SOMETHING UNINIT ON PREV LINE
     }
     }//end of ireadtask[ibuf]>0
 #endif
@@ -1485,7 +1483,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							     vpos[1]*opt.V+Hubbleflow*xpos[1],
 							     vpos[2]*opt.V+Hubbleflow*xpos[2],
 							     bcount2,GASTYPE); //count2 -> bcount2
-				    // INVALID WRITE ABOVE, RELATED TO OTHER UNINIT?
 				    Pbuf[ibufindex].SetPID(gascount);  // GASCOUNT NEEDS TO BE SHARED WITH MPI?
 #ifdef GASON
 				    Pbuf[ibufindex].SetU(utemp);
@@ -1506,7 +1503,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 					Nlocalbaryon[1]++;
 				    }
 				    MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocalbaryon[0], Pbaryons, Nreadbuf, Preadbuf);
-				    // SOMETHIN UNINIT ON PREV LINE
 #else
 				    Pbaryons[bcount2]=Particle(mtemp*mscale,
 							       xpos[0]*lscale,xpos[1]*lscale,xpos[2]*lscale,
@@ -1813,7 +1809,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 	LN   = (lscale/(double)opt.Neff);
     }
 #endif
-    // SHOULD'NT THE DEFAULT LN BE LEVELMIN?
     opt.ellxscale = LN;
     opt.uinfo.eps*=LN;
 

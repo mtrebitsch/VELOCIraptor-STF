@@ -292,7 +292,7 @@ void MPINumInDomainRAMSES(Options &opt)
             }
 
             // now process gas if necessary
-            if (opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALL) {
+            if (opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALL || (opt.partsearchtype==PSTDARK&&opt.iBaryonSearch)) {
                 for (i=0;i<opt.num_files;i++) if (ireadfile[i]) {
                     sprintf(buf1,"%s/amr_%s.out%05d",opt.fname,opt.ramsessnapname,i+1);
                     sprintf(buf2,"%s/amr_%s.out",opt.fname,opt.ramsessnapname);
@@ -376,6 +376,7 @@ void MPINumInDomainRAMSES(Options &opt)
 		    // skip coarse levels (son, flag1, cpu_map)
 		    RAMSES_fortran_skip(Famr[i], 3);
 
+		    // TODO: also read hydro if we want to remove non-zoom regions
 		    // start loop on levels for hydro and AMR
 		    for (j=0;j<header[i].nlevelmax;j++) {
 			dx = pow(0.5, j+1); // local cell size
@@ -402,38 +403,43 @@ void MPINumInDomainRAMSES(Options &opt)
 				//skip cpu map and refinement map (2**ndim * 2)
 				RAMSES_fortran_skip(Famr[i],2*header[i].twotondim);
 			    } // chunksize > 0
-			}
-		    }
-		    // TODO: also read hydro if we want to remove non-zoom regions
-		    if (chunksize>0) {
-			for (idim=0;idim<header[i].twotondim;idim++) {  // loop over cells in octs (per dimension)
-			    int ix=0, iy=0, iz=0;
-			    for (igrid=0;igrid<chunksize;igrid++) {  // loop over cells in the chunk
-				// Select only leaf cells (internal cells or at maximum level)
-				if (icellchunk[idim*chunksize+igrid]==0 || j==header[i].nlevelmax-1) {
-				    // Deal with positions
-				    iz = idim/4;                  // z-position of the cell in the oct
-				    iy = (idim - (4*iz))/2;       // y-position of the cell in the oct
-				    ix = idim - (2*iy) - (4*iz);  // x-position of the cell in the oct
-				    //  pos  = [ --------------- jitter -------------- ] + [ ------ grid centre ------ ] + [ position in oct ]
-				    xtemp[0] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+0*chunksize] + (double(ix)-0.5)*dx ;
-				    xtemp[1] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+1*chunksize] + (double(iy)-0.5)*dx ;
-				    xtemp[2] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+2*chunksize] + (double(iz)-0.5)*dx ;
 
-				    //determine processor this particle belongs on based on its spatial position
+			    if (chunksize>0) {
+				for (idim=0;idim<header[i].twotondim;idim++) {  // loop over cells in octs (per dimension)
+				    int ix=0, iy=0, iz=0;
+				    for (igrid=0;igrid<chunksize;igrid++) {  // loop over cells in the chunk
+					// Select only leaf cells (internal cells or at maximum level)
+					if (icellchunk[idim*chunksize+igrid]==0 || j==header[i].nlevelmax-1) {
+					    // Deal with positions
+					    iz = idim/4;                  // z-position of the cell in the oct
+					    iy = (idim - (4*iz))/2;       // y-position of the cell in the oct
+					    ix = idim - (2*iy) - (4*iz);  // x-position of the cell in the oct
+					    //  pos  = [ --------------- jitter -------------- ] + [ ------ grid centre ------ ] + [ position in oct ]
+					    xtemp[0] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+0*chunksize] + (double(ix)-0.5)*dx ;
+					    xtemp[1] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+1*chunksize] + (double(iy)-0.5)*dx ;
+					    xtemp[2] = ( (float)rand()/(float)RAND_MAX - 0.5)*dx + xtempchunk[igrid+2*chunksize] + (double(iz)-0.5)*dx ;
 
-				    ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
-				    Nbuf[ibuf]++;
+					    //determine processor this particle belongs on based on its spatial position
+					    ibuf=MPIGetParticlesProcessor(xtemp[0],xtemp[1],xtemp[2]);
+					    if (opt.partsearchtype==PSTGAS || opt.partsearchtype==PSTALL) {
+						// We look for gas or "everything"
+						Nbuf[ibuf]++;
+					    }
+					    else {
+						// We look for DM but still count baryons
+						Nbaryonbuf[ibuf]++;
+					    }
+					}
+				    }
 				}
+			    }
+
+			    if (chunksize>0) {
+				delete[] xtempchunk;
+				delete[] icellchunk;
 			    }
 			}
 		    }
-
-		    if (chunksize>0) {
-			delete[] xtempchunk;
-			delete[] icellchunk;
-		    }
-		    
 		    Famr[i].close();
 		    Fhydro[i].close();
 		    }
