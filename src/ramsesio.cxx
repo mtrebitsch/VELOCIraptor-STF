@@ -1405,7 +1405,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 
 #ifdef HIGHRES
                                 // Refinement scalar
-                                reftemp=hydrotempchunk[chunksize*(idim*header[i].nvarh + IDref) + igrid];
+                                if (IDref > 0) reftemp=hydrotempchunk[chunksize*(idim*header[i].nvarh + IDref) + igrid];
 #endif
 
 				// Set density scale
