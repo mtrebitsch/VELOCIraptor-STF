@@ -791,11 +791,6 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				//ensure that store number of particles to be sent to other reading threads
 				Nbuf[ibuf]++;
 				MPIAddParticletoAppropriateBuffer(ibuf, ibufindex, ireadtask, BufSize, Nbuf, Pbuf, Nlocal, Part.data(), Nreadbuf, Preadbuf);
-				// The previous line seems to be a problem
-				// Something to do with the "Part[Nlocal++] = Pbuf[ibufindex];" in that routine
-				// valgrind indicates that there is a problem with the allocation
-				// Maybe (?) Part has not the right size?
-				// Indeed, seems that Nlocal > Part.size() is possible (?!?)
 #else
 				Part[count2]=Particle(mtemp*mscale,
 						      xtemp[0]*lscale,xtemp[1]*lscale,xtemp[2]*lscale,
@@ -851,8 +846,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
-				    Part[bcount2].SetInputFileID(i);
-				    Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+				    Pbaryons[bcount2].SetInputFileID(i);
+				    Pbaryons[bcount2].SetInputIndexInFile(nn+ninputoffset);
 				}
 #endif
 #endif
@@ -1105,8 +1100,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 #ifdef EXTRAINPUTINFO
 		if (opt.iextendedoutput)
 		{
-		    Part[bcount2].SetInputFileID(1);
-		    Part[bcount2].SetInputIndexInFile(nn+ninputoffset);
+		    Pbaryons[bcount2].SetInputFileID(1);
+		    Pbaryons[bcount2].SetInputIndexInFile(nn+ninputoffset);
 		}
 #endif
 #endif
