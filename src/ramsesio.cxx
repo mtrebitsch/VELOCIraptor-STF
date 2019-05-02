@@ -1430,7 +1430,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							     vpos[1]*opt.V+Hubbleflow*xpos[1],
 							     vpos[2]*opt.V+Hubbleflow*xpos[2],
 							     count2,GASTYPE);
-				    Pbuf[ibufindex].SetPID(gascount);  // GASCOUNT NEEDS TO BE SHARED WITH MPI?
+				    Pbuf[ibufindex].SetPID(gascount + GASTYPE*offsetID);  // GASCOUNT NEEDS TO BE SHARED WITH MPI?
 #ifdef GASON
 				    Pbuf[ibufindex].SetU(utemp);
 				    Pbuf[ibufindex].SetSPHDen(rhotemp);
@@ -1456,7 +1456,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							  vpos[2]*opt.V+Hubbleflow*xpos[2],
 							  count2,GASTYPE);
 				    // Stupid counter for the gas particles (idval -> gascount)
-				    Part[count2].SetPID(gascount);
+				    Part[count2].SetPID(gascount + GASTYPE*offsetID);
 #ifdef GASON
 				    Part[count2].SetU(utemp);
 				    Part[count2].SetSPHDen(rhotemp);
@@ -1484,7 +1484,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							     vpos[1]*opt.V+Hubbleflow*xpos[1],
 							     vpos[2]*opt.V+Hubbleflow*xpos[2],
 							     bcount2,GASTYPE); //count2 -> bcount2
-				    Pbuf[ibufindex].SetPID(gascount);  // GASCOUNT NEEDS TO BE SHARED WITH MPI?
+				    Pbuf[ibufindex].SetPID(gascount + GASTYPE*offsetID);  // GASCOUNT NEEDS TO BE SHARED WITH MPI?
 #ifdef GASON
 				    Pbuf[ibufindex].SetU(utemp);
 				    Pbuf[ibufindex].SetSPHDen(rhotemp);
@@ -1511,8 +1511,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							       vpos[1]*opt.V+Hubbleflow*xpos[1],
 							       vpos[2]*opt.V+Hubbleflow*xpos[2],
 							       bcount2,GASTYPE);  // count2 -> bcount2
-				    // Stupid counter for the gas particles (idval -> gascount)
-				    Pbaryons[bcount2].SetPID(gascount);
+				    // Stupid counter for the gas particles (idval -> gascount + GASTYPE*offsetID)
+				    Pbaryons[bcount2].SetPID(gascount + GASTYPE*offsetID);
 #ifdef GASON
 				    Pbaryons[bcount2].SetU(utemp);
 				    Pbaryons[bcount2].SetSPHDen(rhotemp);
