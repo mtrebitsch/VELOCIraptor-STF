@@ -413,7 +413,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 #endif
     Coordinate xpos,vpos;
     RAMSESFLOAT xtemp[3],vtemp[3];
-    RAMSESIDTYPE idval;
+    RAMSESIDTYPE idval, offsetID;
     int typeval;
     RAMSESFLOAT ageval,metval;
     int *ngridlevel,*ngridbound,*ngridfile;
@@ -592,6 +592,13 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     //NOTE: this assumes a uniform box resolution. However this is not used in the rest of this function
     N_DM = opt.Neff*opt.Neff*opt.Neff;
 
+    // Define offset for the particle IDs
+    // for 1000 particles in total:
+    // - gas would be indexed 1, 2, 3
+    // - DM particles would be indexed 1001, 1002, 1003, etc
+    // - star would be indexed 2001, 2002, etc
+    // - BH (?) would be indexed 3001, 3002, 3003, etc
+    offsetID = powf(10.0f, ceilf(log10f(nbodies)+1));
 
     //grab from the first particle file the dimensions of the arrays and also the number of cpus (should be number of files)
     sprintf(buf1,"%s/part_%s.out00001",opt.fname,opt.ramsessnapname);
@@ -742,7 +749,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 						     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 						     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 						     count2,typeval);
-			    Pbuf[ibufindex].SetPID(idval);
+			    Pbuf[ibufindex].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 			    if (opt.iextendedoutput)
 			    {
@@ -759,7 +766,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 						  vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 						  vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 						  count2,typeval);
-			    Part[count2].SetPID(idval);
+			    Part[count2].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 			    if (opt.iextendedoutput)
 			    {
@@ -780,7 +787,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				                         vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 				                         vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 				                         count2,DARKTYPE);
-				Pbuf[ibufindex].SetPID(idval);
+				Pbuf[ibufindex].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -798,7 +805,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 						      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 						      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 						      count2,typeval);
-				Part[count2].SetPID(idval);
+				Part[count2].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -818,7 +825,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							 vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 							 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 							 bcount2);  //count2 -> bcount2?
-				Pbuf[ibufindex].SetPID(idval);
+				Pbuf[ibufindex].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -842,7 +849,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 							   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 							   bcount2,typeval); //count2 -> bcount2?
-				Pbaryons[bcount2].SetPID(idval);
+				Pbaryons[bcount2].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -866,7 +873,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 							 vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 							 count2,STARTYPE);
 				//ensure that store number of particles to be sent to the reading threads
-				Pbuf[ibufindex].SetPID(idval);
+				Pbuf[ibufindex].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -883,7 +890,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 						      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 						      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 						      count2,typeval);
-				Part[count2].SetPID(idval);
+				Part[count2].SetPID(idval + typeval*offsetID);
 #ifdef EXTRAINPUTINFO
 				if (opt.iextendedoutput)
 				{
@@ -1035,8 +1042,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 // 				     vtemp[0]*opt.V+Hubbleflow*xtemp[0],
 // 				     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 // 				     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
-// 				     count2,typeval);
-// 	    Pbuf[ibufindex].SetPID(idval);
+// 				     count2,BHTYPE);
+// 	    Pbuf[ibufindex].SetPID(idval + BHTYPE*offsetID);
 // #ifdef EXTRAINPUTINFO
 // 	    if (opt.iextendedoutput)
 // 	    {
@@ -1053,7 +1060,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 				      vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 				      vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 				      count2,BHTYPE);
-		Part[count2].SetPID(idval);
+		Part[count2].SetPID(idval + BHTYPE*offsetID);
 #ifdef EXTRAINPUTINFO
 		if (opt.iextendedoutput)
 		{
@@ -1072,7 +1079,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 // 				     vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 // 				     vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 // 				     bcount2);  //count2 -> bcount2?
-// 	    Pbuf[ibufindex].SetPID(idval);
+// 	    Pbuf[ibufindex].SetPID(idval + BHTYPE*offsetID);
 // #ifdef EXTRAINPUTINFO
 // 	    if (opt.iextendedoutput)
 // 	    {
@@ -1080,8 +1087,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 // 		Pbuf[ibufindex].SetInputIndexInFile(nn+ninputoffset);
 // 	    }
 // #endif
-// 	    if (typeval==STARTYPE) Pbuf[ibufindex].SetType(STARTYPE);
-// 	    else if (typeval==BHTYPE) Pbuf[ibufindex].SetType(BHTYPE);
+// 	    Pbuf[ibufindex].SetType(BHTYPE);
 // 	    //ensure that store number of particles to be sent to the reading threads
 // 	    Nbuf[ibuf]++;
 // 	    if (ibuf==ThisTask) {
@@ -1096,7 +1102,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 					   vtemp[1]*opt.V+Hubbleflow*xtemp[1],
 					   vtemp[2]*opt.V+Hubbleflow*xtemp[2],
 					   bcount2,BHTYPE);
-		Pbaryons[bcount2].SetPID(idval);
+		Pbaryons[bcount2].SetPID(idval + BHTYPE*offsetID);
 #ifdef EXTRAINPUTINFO
 		if (opt.iextendedoutput)
 		{
