@@ -409,7 +409,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     Double_t mscale,lscale,lvscale,rhoscale;
     Double_t mtemp,utemp,rhotemp,Ztemp,Ttemp;
 #ifdef HIGHRES
-    Double_t reftemp;
+    Double_t reftemp = -1.0;
 #endif
     Coordinate xpos,vpos;
     RAMSESFLOAT xtemp[3],vtemp[3];
@@ -657,18 +657,18 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 		for (j=0;j<partfields.size();++j)
 		{
 		    // The order should not be important, since we skip the fields we do not read
-		    if      (partfields[j] == "position_x")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[0*nchunk]);}
-		    else if (partfields[j] == "position_y")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[1*nchunk]);}
-		    else if (partfields[j] == "position_z")  {RAMSES_fortran_read(Fpart[i],&xtempchunk[2*nchunk]);}
-		    else if (partfields[j] == "velocity_x")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[0*nchunk]);}
-		    else if (partfields[j] == "velocity_y")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[1*nchunk]);}
-		    else if (partfields[j] == "velocity_z")  {RAMSES_fortran_read(Fpart[i],&vtempchunk[2*nchunk]);}
-		    else if (partfields[j] == "mass")        {RAMSES_fortran_read(Fpart[i],mtempchunk)           ;}
-		    else if (partfields[j] == "identity")    {RAMSES_fortran_read(Fpart[i],idvalchunk)           ;}
-		    else if (partfields[j] == "levelp")      {RAMSES_fortran_read(Fpart[i],levelchunk)           ;}
-		    else if (partfields[j] == "family")      {RAMSES_fortran_read(Fpart[i],typechunk)            ;}
-		    else if (partfields[j] == "birth_time")  {RAMSES_fortran_read(Fpart[i],agetempchunk)         ;}
-		    else if (partfields[j] == "metallicity") {RAMSES_fortran_read(Fpart[i],mettempchunk)         ;}
+		    if      (partfields[j] == string("position_x"))  {RAMSES_fortran_read(Fpart[i],&xtempchunk[0*nchunk]);}
+		    else if (partfields[j] == string("position_y"))  {RAMSES_fortran_read(Fpart[i],&xtempchunk[1*nchunk]);}
+		    else if (partfields[j] == string("position_z"))  {RAMSES_fortran_read(Fpart[i],&xtempchunk[2*nchunk]);}
+		    else if (partfields[j] == string("velocity_x"))  {RAMSES_fortran_read(Fpart[i],&vtempchunk[0*nchunk]);}
+		    else if (partfields[j] == string("velocity_y"))  {RAMSES_fortran_read(Fpart[i],&vtempchunk[1*nchunk]);}
+		    else if (partfields[j] == string("velocity_z"))  {RAMSES_fortran_read(Fpart[i],&vtempchunk[2*nchunk]);}
+		    else if (partfields[j] == string("mass"))        {RAMSES_fortran_read(Fpart[i],mtempchunk)           ;}
+		    else if (partfields[j] == string("identity"))    {RAMSES_fortran_read(Fpart[i],idvalchunk)           ;}
+		    else if (partfields[j] == string("levelp"))      {RAMSES_fortran_read(Fpart[i],levelchunk)           ;}
+		    else if (partfields[j] == string("family"))      {RAMSES_fortran_read(Fpart[i],typechunk)            ;}
+		    else if (partfields[j] == string("birth_time"))  {RAMSES_fortran_read(Fpart[i],agetempchunk)         ;}
+		    else if (partfields[j] == string("metallicity")) {RAMSES_fortran_read(Fpart[i],mettempchunk)         ;}
 		    else {RAMSES_fortran_skip(Fpart[i]);}
 		}
 
@@ -706,7 +706,7 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 			metval = mettempchunk[nn];
 			if (typechunk[nn] == 1) typeval = DARKTYPE;
 			else if (typechunk[nn] == 2) typeval = STARTYPE;
-			else typeval=BHTYPE; // MT: FIXME BH,  probably not ok
+			else typeval=-1; // FIXME: is -1 ok as a undefined value?
 #ifdef HIGHRES
                         // For high-res simulation, find mass of highres DM particles
                         if (mtemp>0 && mtemp < MP_DM && typeval==DARKTYPE) MP_DM=mtemp;
@@ -977,15 +977,15 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
 	for (j=0;j<sinkfields.size();++j)
 	{
 	    // The order should not be important, since we skip the fields we do not read
-	    if      (sinkfields[j] == "identity")    {RAMSES_fortran_read(Fsink,idvalchunk)           ;}
-	    else if (sinkfields[j] == "mass")        {RAMSES_fortran_read(Fsink,mtempchunk)           ;}
-	    else if (sinkfields[j] == "position_x")  {RAMSES_fortran_read(Fsink,&xtempchunk[0*nchunk]);}
-	    else if (sinkfields[j] == "position_y")  {RAMSES_fortran_read(Fsink,&xtempchunk[1*nchunk]);}
-	    else if (sinkfields[j] == "position_z")  {RAMSES_fortran_read(Fsink,&xtempchunk[2*nchunk]);}
-	    else if (sinkfields[j] == "velocity_x")  {RAMSES_fortran_read(Fsink,&vtempchunk[0*nchunk]);}
-	    else if (sinkfields[j] == "velocity_y")  {RAMSES_fortran_read(Fsink,&vtempchunk[1*nchunk]);}
-	    else if (sinkfields[j] == "velocity_z")  {RAMSES_fortran_read(Fsink,&vtempchunk[2*nchunk]);}
-	    else if (sinkfields[j] == "birth_time")  {RAMSES_fortran_read(Fsink,agetempchunk)         ;}
+	    if      (sinkfields[j] == string("identity"))    {RAMSES_fortran_read(Fsink,idvalchunk)           ;}
+	    else if (sinkfields[j] == string("mass"))        {RAMSES_fortran_read(Fsink,mtempchunk)           ;}
+	    else if (sinkfields[j] == string("position_x"))  {RAMSES_fortran_read(Fsink,&xtempchunk[0*nchunk]);}
+	    else if (sinkfields[j] == string("position_y"))  {RAMSES_fortran_read(Fsink,&xtempchunk[1*nchunk]);}
+	    else if (sinkfields[j] == string("position_z"))  {RAMSES_fortran_read(Fsink,&xtempchunk[2*nchunk]);}
+	    else if (sinkfields[j] == string("velocity_x"))  {RAMSES_fortran_read(Fsink,&vtempchunk[0*nchunk]);}
+	    else if (sinkfields[j] == string("velocity_y"))  {RAMSES_fortran_read(Fsink,&vtempchunk[1*nchunk]);}
+	    else if (sinkfields[j] == string("velocity_z"))  {RAMSES_fortran_read(Fsink,&vtempchunk[2*nchunk]);}
+	    else if (sinkfields[j] == string("birth_time"))  {RAMSES_fortran_read(Fsink,agetempchunk)         ;}
 	    else {RAMSES_fortran_skip(Fsink);}
 	}
 	Fsink.close();
@@ -1172,8 +1172,8 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     vector<string> hfields;
     sprintf(buf1,"%s/hydro_file_descriptor.txt", opt.fname);
     hfields = RAMSES_read_descriptor(buf1);
-    // define the indices for the hydro variables
-    int IDrho=-1, IDvx=-1, IDvy=-1, IDvz=-1, IDU=-1, IDZ=-1;
+    // define the indices for the hydro variables (default = standard ramses)
+    int IDrho=0, IDvx=1, IDvy=2, IDvz=3, IDU=4, IDZ=5;
 #ifdef HIGHRES
     int IDref=-1;
 #endif
