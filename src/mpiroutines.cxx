@@ -211,7 +211,7 @@ void MPIAdjustDomain(Options opt){
     Double_t aadjust, lscale;
     if (opt.comove) aadjust=1.0;
     else aadjust=opt.a;
-    lscale=opt.L/opt.h*aadjust;
+    lscale=opt.lengthinputconversion/opt.h*aadjust;
     for (int j=0;j<NProcs;j++) for (int k=0;k<3;k++) {mpi_domain[j].bnd[k][0]*=lscale;mpi_domain[j].bnd[k][1]*=lscale;}
 }
 
@@ -285,6 +285,12 @@ int MPIInDomain(Double_t xsearch[3][2], Double_t bnd[3][2]){
 int MPISearchForOverlap(Particle &Part, Double_t &rdist){
     Double_t xsearch[3][2];
     for (auto k=0;k<3;k++) {xsearch[k][0]=Part.GetPosition(k)-rdist;xsearch[k][1]=Part.GetPosition(k)+rdist;}
+    return MPISearchForOverlap(xsearch);
+}
+
+int MPISearchForOverlap(Coordinate &x, Double_t &rdist){
+    Double_t xsearch[3][2];
+    for (auto k=0;k<3;k++) {xsearch[k][0]=x[k]-rdist;xsearch[k][1]=x[k]+rdist;}
     return MPISearchForOverlap(xsearch);
 }
 
@@ -483,17 +489,23 @@ int MPISearchForOverlap(Double_t xsearch[3][2]){
 ///\todo clean up memory allocation in these functions, no need to keep allocating xsearch,xsearchp,numoverlap,etc
 /// Determine if a particle needs to be exported to another mpi domain based on a physical search radius
 #ifdef SWIFTINTERFACE
+
 int MPISearchForOverlapUsingMesh(Options &opt, Particle &Part, Double_t &rdist){
     Double_t xsearch[3][2];
-    Double_t xsearchp[7][3][2];//used to store periodic reflections
-    int numoverlap=0,numreflecs=0,ireflec[3],numreflecchoice=0;
-    int indomain;
-    int j,k;
+    for (auto k=0;k<3;k++) {xsearch[k][0]=Part.GetPosition(k)-rdist;xsearch[k][1]=Part.GetPosition(k)+rdist;}
+    return MPISearchForOverlapUsingMesh(opt, xsearch);
+}
 
-    for (k=0;k<3;k++) {xsearch[k][0]=Part.GetPosition(k)-rdist;xsearch[k][1]=Part.GetPosition(k)+rdist;}
+int MPISearchForOverlapUsingMesh(Options &opt, Coordinate &x, Double_t &rdist){
+    Double_t xsearch[3][2];
+    for (auto k=0;k<3;k++) {xsearch[k][0]=x[k]-rdist;xsearch[k][1]=x[k]+rdist;}
+    return MPISearchForOverlapUsingMesh(opt, xsearch);
+}
 
+int MPISearchForOverlapUsingMesh(Options &opt, Double_t xsearch[3][2]){
+    int numoverlap=0;
     /// Store whether an MPI domain has already been sent to
-    int *sent_mpi_domain = new int[NProcs];
+    vector<int>sent_mpi_domain(NProcs);
     for(int i=0; i<NProcs; i++) sent_mpi_domain[i] = 0;
 
     vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
@@ -504,183 +516,6 @@ int MPISearchForOverlapUsingMesh(Options &opt, Particle &Part, Double_t &rdist){
         numoverlap++;
         sent_mpi_domain[cellnodeID]++;
     }
-    /*
-    if (mpi_period!=0) {
-        for (k=0;k<3;k++) if (xsearch[k][0]<0||xsearch[k][1]>mpi_period) ireflec[numreflecs++]=k;
-        if (numreflecs==1)numreflecchoice=1;
-        else if (numreflecs==2) numreflecchoice=3;
-        else if (numreflecs==3) numreflecchoice=7;
-        for (j=0;j<numreflecchoice;j++) for (k=0;k<3;k++) {xsearchp[j][k][0]=xsearch[k][0];xsearchp[j][k][1]=xsearch[k][1];}
-        if (numreflecs==1) {
-            if (xsearch[ireflec[0]][0]<0) {
-                    xsearchp[0][ireflec[0]][0]=xsearch[ireflec[0]][0]+mpi_period;
-                    xsearchp[0][ireflec[0]][1]=xsearch[ireflec[0]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[0]][1]>mpi_period) {
-                    xsearchp[0][ireflec[0]][0]=xsearch[ireflec[0]][0]-mpi_period;
-                    xsearchp[0][ireflec[0]][1]=xsearch[ireflec[0]][1]-mpi_period;
-            }
-        }
-        else if (numreflecs==2) {
-            k=0;j=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k++;j++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-        }
-        else if (numreflecs==3) {
-            j=0;k=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k=1;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k=2;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k=1;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k=2;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            j++;k=0;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-            k++;
-            if (xsearch[ireflec[k]][0]<0) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]+mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]+mpi_period;
-            }
-            else if (xsearch[ireflec[k]][1]>mpi_period) {
-                    xsearchp[j][ireflec[k]][0]=xsearch[ireflec[k]][0]-mpi_period;
-                    xsearchp[j][ireflec[k]][1]=xsearch[ireflec[k]][1]-mpi_period;
-            }
-        }
-        for (int k=0;k<numreflecchoice;k++) {
-            vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearchp[k]);
-            for (auto j:celllist) {
-                const int cellnodeID = opt.cellnodeids[j];
-                /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
-                if (sent_mpi_domain[cellnodeID] == 1) continue;
-                numoverlap++;
-                sent_mpi_domain[cellnodeID]++;
-            }
-        }
-    }
-    */
     return numoverlap;
 }
 #endif
@@ -1004,7 +839,7 @@ void MPIGetExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Part,
     const double ih_x = opt.icellwidth[0];
     const double ih_y = opt.icellwidth[1];
     const double ih_z = opt.icellwidth[2];
-    int *sent_mpi_domain = new int[NProcs];
+    vector<int>sent_mpi_domain(NProcs);
 
     for (i=0;i<nbodies;i++) {
         for(int k=0; k<NProcs; k++) sent_mpi_domain[k] = 0;
@@ -1014,15 +849,9 @@ void MPIGetExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Part,
             const int cellnodeID = opt.cellnodeids[j];
             /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
             if (sent_mpi_domain[cellnodeID] == 1) continue;
-            vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
-            for (auto j:celllist) {
-                const int cellnodeID = opt.cellnodeids[j];
-                /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
-                if (sent_mpi_domain[cellnodeID] == 1) continue;
-                nexport++;
-                nsend_local[cellnodeID]++;
-                sent_mpi_domain[cellnodeID]++;
-            }
+            nexport++;
+            nsend_local[cellnodeID]++;
+            sent_mpi_domain[cellnodeID]++;
         }
     }
     NExport=nexport;//*(1.0+MPIExportFac);
@@ -1207,7 +1036,7 @@ void MPIBuildParticleExportListUsingMesh(Options &opt, const Int_t nbodies, Part
     Double_t xsearch[3][2];
     Int_t sendTask,recvTask;
     MPI_Status status;
-    int *sent_mpi_domain = new int[NProcs];
+    vector<int>sent_mpi_domain(NProcs);
 
     ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
     ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
@@ -1225,21 +1054,15 @@ void MPIBuildParticleExportListUsingMesh(Options &opt, const Int_t nbodies, Part
             const int cellnodeID = opt.cellnodeids[j];
             /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
             if (sent_mpi_domain[cellnodeID] == 1) continue;
-            vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
-            for (auto j:celllist) {
-                const int cellnodeID = opt.cellnodeids[j];
-                /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
-                if (sent_mpi_domain[cellnodeID] == 1) continue;
-                //FoFDataIn[nexport].Part=Part[i];
-                FoFDataIn[nexport].Index = i;
-                FoFDataIn[nexport].Task = cellnodeID;
-                FoFDataIn[nexport].iGroup = pfof[Part[i].GetID()];//set group id
-                FoFDataIn[nexport].iGroupTask = ThisTask;//and the task of the group
-                FoFDataIn[nexport].iLen = Len[i];
-                nexport++;
-                nsend_local[cellnodeID]++;
-                sent_mpi_domain[cellnodeID]++;
-            }
+            //FoFDataIn[nexport].Part=Part[i];
+            FoFDataIn[nexport].Index = i;
+            FoFDataIn[nexport].Task = cellnodeID;
+            FoFDataIn[nexport].iGroup = pfof[Part[i].GetID()];//set group id
+            FoFDataIn[nexport].iGroupTask = ThisTask;//and the task of the group
+            FoFDataIn[nexport].iLen = Len[i];
+            nexport++;
+            nsend_local[cellnodeID]++;
+            sent_mpi_domain[cellnodeID]++;
         }
     }
 
@@ -1394,9 +1217,9 @@ void MPIGetNNExportNum(const Int_t nbodies, Particle *Part, Double_t *rdist){
     for (i=0;i<nbodies;i++)
     {
 #ifdef STRUCDEN
-    if (Part[i].GetType()>0)
-    {
+        if (Part[i].GetType()==0) continue;
 #endif
+        if (rdist[i] == 0) continue;
         for (int k=0;k<3;k++) {xsearch[k][0]=Part[i].GetPosition(k)-rdist[i];xsearch[k][1]=Part[i].GetPosition(k)+rdist[i];}
         for (j=0;j<NProcs;j++) {
             if (j!=ThisTask) {
@@ -1408,9 +1231,6 @@ void MPIGetNNExportNum(const Int_t nbodies, Particle *Part, Double_t *rdist){
                 }
             }
         }
-#ifdef STRUCDEN
-    }
-#endif
     }
     //and then gather the number of particles to be sent from mpi thread m to mpi thread n in the mpi_nsend[NProcs*NProcs] array via [n+m*NProcs]
     MPI_Allgather(nsend_local, NProcs, MPI_Int_t, mpi_nsend, NProcs, MPI_Int_t, MPI_COMM_WORLD);
@@ -1429,7 +1249,7 @@ void MPIGetNNExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Par
     Int_t sendTask,recvTask;
     MPI_Status status;
     int indomain;
-    int *sent_mpi_domain = new int[NProcs];
+    vector<int>sent_mpi_domain(NProcs);
 
     ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
     ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
@@ -1440,11 +1260,53 @@ void MPIGetNNExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Par
     for (i=0;i<nbodies;i++)
     {
 #ifdef STRUCDEN
-    if (Part[i].GetType()>0)
-    {
+        if (Part[i].GetType() == 0) continue;
 #endif
+        if (rdist[i] == 0) continue;
         for(int k=0; k<NProcs; k++) sent_mpi_domain[k] = 0;
         for (int k=0;k<3;k++) {xsearch[k][0]=Part[i].GetPosition(k)-rdist[i];xsearch[k][1]=Part[i].GetPosition(k)+rdist[i];}
+        vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
+        for (auto j:celllist) {
+            const int cellnodeID = opt.cellnodeids[j];
+            /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
+            if (sent_mpi_domain[cellnodeID] == 1) continue;
+            nexport++;
+            nsend_local[cellnodeID]++;
+            sent_mpi_domain[cellnodeID]++;
+        }
+    }
+    //and then gather the number of particles to be sent from mpi thread m to mpi thread n in the mpi_nsend[NProcs*NProcs] array via [n+m*NProcs]
+    MPI_Allgather(nsend_local, NProcs, MPI_Int_t, mpi_nsend, NProcs, MPI_Int_t, MPI_COMM_WORLD);
+    NImport=0;
+    for (j=0;j<NProcs;j++)NImport+=mpi_nsend[ThisTask+j*NProcs];
+    NExport=nexport;
+}
+
+/*
+void MPIGetNNExportNumUsingMesh(Options &opt, const Int_t numleafnodes, vector<leaf_node_info> &leafnodes, KDTree *&tree){
+    Int_t i, j,nthreads,nexport=0,nimport=0;
+    Int_t nsend_local[NProcs],noffset[NProcs],nbuffer[NProcs];
+    Double_t xsearch[3][2];
+    Int_t sendTask,recvTask;
+    MPI_Status status;
+    int indomain;
+    int *sent_mpi_domain = new int[NProcs];
+    int inode;
+
+    ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
+    ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
+    ///can only access the appropriate memory and adjust nsend_local.\n
+    ///\em Or outer loop is over threads, inner loop over nbodies and just have a idlist of size Nlocal that tags particles
+    ///which must be exported. Then its a much quicker follow up loop (no if statement) that stores the data
+    for (j=0;j<NProcs;j++) nsend_local[j]=0;
+    for (i=0;i<nbodies;i++)
+    {
+#ifdef STRUCDEN
+        if (Part[i].GetType()==0) continue;
+#endif
+        for(int k=0; k<NProcs; k++) sent_mpi_domain[k] = 0;
+        inode = tree->FindLeafNode(i)
+        for(int k=0;k<3;k++) {xsearch[k][0]=Part[i].GetPosition(k)-leafnodes[inode].searchdist;xsearch[k][1]=Part[i].GetPosition(k)+leafnodes[inode].searchdist;}
         vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
         for (auto j:celllist) {
             const int cellnodeID = opt.cellnodeids[j];
@@ -1460,9 +1322,6 @@ void MPIGetNNExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Par
                 sent_mpi_domain[cellnodeID]++;
             }
         }
-#ifdef STRUCDEN
-    }
-#endif
     }
     //and then gather the number of particles to be sent from mpi thread m to mpi thread n in the mpi_nsend[NProcs*NProcs] array via [n+m*NProcs]
     MPI_Allgather(nsend_local, NProcs, MPI_Int_t, mpi_nsend, NProcs, MPI_Int_t, MPI_COMM_WORLD);
@@ -1470,6 +1329,7 @@ void MPIGetNNExportNumUsingMesh(Options &opt, const Int_t nbodies, Particle *Par
     for (j=0;j<NProcs;j++)NImport+=mpi_nsend[ThisTask+j*NProcs];
     NExport=nexport;
 }
+*/
 #endif
 
 /*! like \ref MPIBuildParticleExportList but each particle has a different distance stored in rdist used to find nearest neighbours
@@ -1493,11 +1353,11 @@ void MPIBuildParticleNNExportList(const Int_t nbodies, Particle *Part, Double_t 
     ///which must be exported. Then its a much quicker follow up loop (no if statement) that stores the data
     for (j=0;j<NProcs;j++) nsend_local[j]=0;
     for (i=0;i<nbodies;i++)
+    {
 #ifdef STRUCDEN
-    if (Part[i].GetType()>0)
-    {
+        if (Part[i].GetType()==0) continue;
 #endif
-    {
+        if (rdist[i] == 0) continue;
         for (int k=0;k<3;k++) {xsearch[k][0]=Part[i].GetPosition(k)-rdist[i];xsearch[k][1]=Part[i].GetPosition(k)+rdist[i];}
         for (j=0;j<NProcs;j++) {
             if (j!=ThisTask) {
@@ -1518,12 +1378,14 @@ void MPIBuildParticleNNExportList(const Int_t nbodies, Particle *Part, Double_t 
                 }
             }
         }
-#ifdef STRUCDEN
-    }
-#endif
     }
     //sort the export data such that all particles to be passed to thread j are together in ascending thread number
-    if (nexport>0) qsort(NNDataIn, nexport, sizeof(struct nndata_in), nn_export_cmp);
+    //if (nexport>0) qsort(NNDataIn, nexport, sizeof(struct nndata_in), nn_export_cmp);
+    if (nexport>0) {
+	       std::sort(NNDataIn, NNDataIn + nexport, [](const nndata_in &a, const nndata_in &b) {
+            return a.ToTask < b.ToTask;
+        });
+     }
 
     //then store the offset in the export particle data for the jth Task in order to send data.
     for(j = 1, noffset[0] = 0; j < NProcs; j++) noffset[j]=noffset[j-1] + nsend_local[j-1];
@@ -1578,7 +1440,6 @@ void MPIBuildParticleNNExportList(const Int_t nbodies, Particle *Part, Double_t 
         }
     }
     }
-    MPI_Barrier(MPI_COMM_WORLD);
 }
 /*! like \ref MPIBuildParticleExportList but each particle has a different distance stored in rdist used to find nearest neighbours
 */
@@ -1590,7 +1451,7 @@ void MPIBuildParticleNNExportListUsingMesh(Options &opt, const Int_t nbodies, Pa
     Int_t sendTask,recvTask;
     MPI_Status status;
     int indomain;
-    int *sent_mpi_domain = new int[NProcs];
+    vector<int>sent_mpi_domain(NProcs);
 
     ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
     ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
@@ -1599,11 +1460,11 @@ void MPIBuildParticleNNExportListUsingMesh(Options &opt, const Int_t nbodies, Pa
     ///which must be exported. Then its a much quicker follow up loop (no if statement) that stores the data
     for (j=0;j<NProcs;j++) nsend_local[j]=0;
     for (i=0;i<nbodies;i++)
+    {
 #ifdef STRUCDEN
-    if (Part[i].GetType()>0)
-    {
+        if (Part[i].GetType()==0) continue;
 #endif
-    {
+        if (rdist[i] == 0) continue;
         for (int k=0;k<3;k++) {xsearch[k][0]=Part[i].GetPosition(k)-rdist[i];xsearch[k][1]=Part[i].GetPosition(k)+rdist[i];}
 
         /// Store whether an MPI domain has already been sent to
@@ -1614,31 +1475,27 @@ void MPIBuildParticleNNExportListUsingMesh(Options &opt, const Int_t nbodies, Pa
             const int cellnodeID = opt.cellnodeids[j];
             /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
             if (sent_mpi_domain[cellnodeID] == 1) continue;
-            vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
-            for (auto j:celllist) {
-                const int cellnodeID = opt.cellnodeids[j];
-                /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
-                if (sent_mpi_domain[cellnodeID] == 1) continue;
-                //NNDataIn[nexport].Index=i;
-                NNDataIn[nexport].ToTask=cellnodeID;
-                NNDataIn[nexport].FromTask=ThisTask;
-                NNDataIn[nexport].R2=rdist[i]*rdist[i];
-                //NNDataIn[nexport].V2=vdist2[i];
-                for (int k=0;k<3;k++) {
-                    NNDataIn[nexport].Pos[k]=Part[i].GetPosition(k);
-                    NNDataIn[nexport].Vel[k]=Part[i].GetVelocity(k);
-                }
-                nexport++;
-                nsend_local[cellnodeID]++;
-                sent_mpi_domain[cellnodeID]++;
+            //NNDataIn[nexport].Index=i;
+            NNDataIn[nexport].ToTask=cellnodeID;
+            NNDataIn[nexport].FromTask=ThisTask;
+            NNDataIn[nexport].R2=rdist[i]*rdist[i];
+            //NNDataIn[nexport].V2=vdist2[i];
+            for (int k=0;k<3;k++) {
+                NNDataIn[nexport].Pos[k]=Part[i].GetPosition(k);
+                NNDataIn[nexport].Vel[k]=Part[i].GetVelocity(k);
             }
+            nexport++;
+            nsend_local[cellnodeID]++;
+            sent_mpi_domain[cellnodeID]++;
         }
-#ifdef STRUCDEN
-    }
-#endif
     }
     //sort the export data such that all particles to be passed to thread j are together in ascending thread number
-    if (nexport>0) qsort(NNDataIn, nexport, sizeof(struct nndata_in), nn_export_cmp);
+    //if (nexport>0) qsort(NNDataIn, nexport, sizeof(struct nndata_in), nn_export_cmp);
+    if (nexport>0) {
+	       std::sort(NNDataIn, NNDataIn + nexport, [](const nndata_in &a, const nndata_in &b) {
+            return a.ToTask < b.ToTask;
+        });
+     }
 
     //then store the offset in the export particle data for the jth Task in order to send data.
     for(j = 1, noffset[0] = 0; j < NProcs; j++) noffset[j]=noffset[j-1] + nsend_local[j-1];
@@ -1700,7 +1557,6 @@ void MPIGetNNImportNum(const Int_t nbodies, KDTree *tree, Particle *Part){
         nbuffer[j]=0;
         for (int k=0;k<j;k++)nbuffer[j]+=mpi_nsend[ThisTask+k*NProcs];//offset on "receiver" end
     }
-
     for (j=0;j<NProcs;j++) nsend_local[j]=0;
     for (j=0;j<NProcs;j++) {
         for (i=0;i<nbodies;i++) nn[i]=-1;
@@ -1755,7 +1611,6 @@ Int_t MPIBuildParticleNNImportList(const Int_t nbodies, KDTree *tree, Particle *
         nbuffer[j]=0;
         for (int k=0;k<j;k++)nbuffer[j]+=mpi_nsend[ThisTask+k*NProcs];//offset on "receiver" end
     }
-
     for (j=0;j<NProcs;j++) nsend_local[j]=0;
     for (j=0;j<NProcs;j++) {
 #ifdef USEOPENMP
@@ -1906,6 +1761,51 @@ vector<bool> MPIGetHaloSearchExportNum(const Int_t ngroup, PropData *&pdata, vec
     return halooverlap;
 }
 
+#ifdef SWIFTINTERFACE
+/*! similar \ref MPIGetHaloSearchExportNum but using swift mesh mpi decomposition
+*/
+vector<bool> MPIGetHaloSearchExportNumUsingMesh(Options &opt, const Int_t ngroup, PropData *&pdata, vector<Double_t> &rdist)
+{
+    Int_t nexport=0,nimport=0;
+    Int_t nsend_local[NProcs],noffset[NProcs],nbuffer[NProcs];
+    Double_t xsearch[3][2];
+    Int_t sendTask,recvTask;
+    MPI_Status status;
+    int indomain;
+    vector<bool> halooverlap(ngroup+1);
+    vector<int>sent_mpi_domain(NProcs);
+
+    ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
+    ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
+    ///can only access the appropriate memory and adjust nsend_local.\n
+    ///\em Or outer loop is over threads, inner loop over nbodies and just have a idlist of size Nlocal that tags particles
+    ///which must be exported. Then its a much quicker follow up loop (no if statement) that stores the data
+    for (auto j=0;j<NProcs;j++) nsend_local[j]=0;
+    for (auto i=1;i<=ngroup;i++)
+    {
+        for (int k=0; k<NProcs; k++) sent_mpi_domain[k] = 0;
+        for (int k=0;k<3;k++) {xsearch[k][0]=pdata[i].gcm[k]-rdist[i];xsearch[k][1]=pdata[i].gcm[k]+rdist[i];}
+        vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
+        for (auto j:celllist) {
+            const int cellnodeID = opt.cellnodeids[j];
+            /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
+            if (sent_mpi_domain[cellnodeID] == 1) continue;
+            nexport++;
+            nsend_local[cellnodeID]++;
+            halooverlap[i]=true;
+            sent_mpi_domain[cellnodeID]++;
+        }
+    }
+
+    //and then gather the number of particles to be sent from mpi thread m to mpi thread n in the mpi_nsend[NProcs*NProcs] array via [n+m*NProcs]
+    MPI_Allgather(nsend_local, NProcs, MPI_Int_t, mpi_nsend, NProcs, MPI_Int_t, MPI_COMM_WORLD);
+    NImport=0;
+    for (auto j=0;j<NProcs;j++)NImport+=mpi_nsend[ThisTask+j*NProcs];
+    NExport=nexport;
+    return halooverlap;
+}
+#endif
+
 /*! like \ref MPIBuildParticleExportList but each particle has a different distance stored in rdist used to find nearest neighbours
 */
 void MPIBuildHaloSearchExportList(const Int_t ngroup, PropData *&pdata, vector<Double_t> &rdist, vector<bool> &halooverlap)
@@ -2005,6 +1905,110 @@ void MPIBuildHaloSearchExportList(const Int_t ngroup, PropData *&pdata, vector<D
         }
     }
 }
+
+#ifdef SWIFTINTERFACE
+/*! similar \ref MPIBuildHaloSearchExportList but for swift mesh mpi decomposition
+*/
+void MPIBuildHaloSearchExportListUsingMesh(Options &opt, const Int_t ngroup, PropData *&pdata, vector<Double_t> &rdist, vector<bool> &halooverlap)
+{
+    Int_t nthreads,nexport=0,nimport=0;
+    Int_t nsend_local[NProcs],noffset[NProcs],nbuffer[NProcs];
+    Double_t xsearch[3][2];
+    MPI_Status status;
+    int indomain;
+    int sendTask,recvTask;
+    int maxchunksize=2147483648/NProcs/sizeof(nndata_in);
+    int nsend,nrecv,nsendchunks,nrecvchunks,numsendrecv;
+    int sendoffset,recvoffset;
+    int cursendchunksize,currecvchunksize;
+    vector<int>sent_mpi_domain(NProcs);
+
+    ///\todo would like to add openmp to this code. In particular, loop over nbodies but issue is nexport.
+    ///This would either require making a FoFDataIn[nthreads][NExport] structure so that each omp thread
+    ///can only access the appropriate memory and adjust nsend_local.\n
+    ///\em Or outer loop is over threads, inner loop over nbodies and just have a idlist of size Nlocal that tags particles
+    ///which must be exported. Then its a much quicker follow up loop (no if statement) that stores the data
+    for (auto j=0;j<NProcs;j++) nsend_local[j]=0;
+    for (auto i=1;i<=ngroup;i++)
+    {
+        if (halooverlap[i]==false) continue;
+        for (int k=0; k<NProcs; k++) sent_mpi_domain[k] = 0;
+        for (int k=0;k<3;k++) {xsearch[k][0]=pdata[i].gcm[k]-rdist[i];xsearch[k][1]=pdata[i].gcm[k]+rdist[i];}
+        vector<int> celllist=MPIGetCellListInSearchUsingMesh(opt,xsearch);
+        for (auto j:celllist) {
+            const int cellnodeID = opt.cellnodeids[j];
+            /// Only check if particles have overlap with neighbouring cells that are on another MPI domain and have not already been sent to
+            if (sent_mpi_domain[cellnodeID] == 1) continue;
+            //NNDataIn[nexport].Index=i;
+            NNDataIn[nexport].ToTask=cellnodeID;
+            NNDataIn[nexport].FromTask=ThisTask;
+            NNDataIn[nexport].R2=rdist[i]*rdist[i];
+            //NNDataIn[nexport].V2=vdist2[i];
+            for (int k=0;k<3;k++) {
+                NNDataIn[nexport].Pos[k]=pdata[i].gcm[k];
+            }
+            nexport++;
+            nsend_local[cellnodeID]++;
+            sent_mpi_domain[cellnodeID]++;
+        }
+    }
+
+    //sort the export data such that all particles to be passed to thread j are together in ascending thread number
+    if (nexport>0) qsort(NNDataIn, nexport, sizeof(struct nndata_in), nn_export_cmp);
+
+    //then store the offset in the export data for the jth Task in order to send data.
+    noffset[0] = 0; for(auto j = 1; j < NProcs; j++) noffset[j]=noffset[j-1] + nsend_local[j-1];
+    //and then gather the number of items to be sent from mpi thread m to mpi thread n in the mpi_nsend[NProcs*NProcs] array via [n+m*NProcs]
+    MPI_Allgather(nsend_local, NProcs, MPI_Int_t, mpi_nsend, NProcs, MPI_Int_t, MPI_COMM_WORLD);
+    //now send the data.
+
+    for (auto j=0;j<NProcs;j++)nimport+=mpi_nsend[ThisTask+j*NProcs];
+    //if task neither sends or receives, do nothing
+    if (nexport==0&&nimport==0) return;
+    for(auto j=0;j<NProcs;j++)
+    {
+        if (j!=ThisTask)
+        {
+            sendTask = ThisTask;
+            recvTask = j;
+            nbuffer[recvTask]=0;
+            for (int k=0;k<recvTask;k++)nbuffer[recvTask]+=mpi_nsend[ThisTask+k*NProcs];//offset on local receiving buffer
+            if(mpi_nsend[ThisTask * NProcs + recvTask] > 0 || mpi_nsend[recvTask * NProcs + ThisTask] > 0)
+            {
+                //send info in loops to minimize memory footprint
+                cursendchunksize=currecvchunksize=maxchunksize;
+                nsendchunks=ceil(mpi_nsend[recvTask+ThisTask*NProcs]/(Double_t)maxchunksize);
+                nrecvchunks=ceil(mpi_nsend[ThisTask+recvTask*NProcs]/(Double_t)maxchunksize);
+                if (cursendchunksize>mpi_nsend[recvTask+ThisTask*NProcs]) {
+                    nsendchunks=1;
+                    cursendchunksize=mpi_nsend[recvTask+ThisTask*NProcs];
+                }
+                if (currecvchunksize>mpi_nsend[ThisTask+recvTask*NProcs]) {
+                    nrecvchunks=1;
+                    currecvchunksize=mpi_nsend[ThisTask+recvTask*NProcs];
+                }
+                numsendrecv=max(nsendchunks,nrecvchunks);
+                sendoffset=recvoffset=0;
+                for (auto ichunk=0;ichunk<numsendrecv;ichunk++)
+                {
+                    //blocking point-to-point send and receive. Here must determine the appropriate offset point in the local export buffer
+                    //for sending data and also the local appropriate offset in the local the receive buffer for information sent from the local receiving buffer
+                    MPI_Sendrecv(&NNDataIn[noffset[recvTask]+sendoffset],
+                        cursendchunksize * sizeof(struct nndata_in), MPI_BYTE,
+                        recvTask, TAG_NN_A+ichunk,
+                        &NNDataGet[nbuffer[recvTask]+recvoffset],
+                        currecvchunksize * sizeof(struct nndata_in),
+                        MPI_BYTE, recvTask, TAG_NN_A+ichunk, MPI_COMM_WORLD, &status);
+                    sendoffset+=cursendchunksize;
+                    recvoffset+=currecvchunksize;
+                    if (cursendchunksize>mpi_nsend[recvTask+ThisTask * NProcs]-sendoffset)cursendchunksize=mpi_nsend[recvTask+ThisTask * NProcs]-sendoffset;
+                    if (currecvchunksize>mpi_nsend[ThisTask+recvTask * NProcs]-sendoffset)currecvchunksize=mpi_nsend[ThisTask+recvTask * NProcs]-recvoffset;
+                }
+            }
+        }
+    }
+}
+#endif
 
 /*! Mirror to \ref MPIGetHaloSearchExportNum, use exported positions, run ball search to find number of all local particles that need to be
     imported back to exported positions's thread so that a proper search can be made.
@@ -3276,6 +3280,19 @@ void MPIBuildGridData(const Int_t ngrid, GridCell *grid, Coordinate *gvel, Matri
                 MPI_BYTE, recvTask, TAG_GRID_C, MPI_COMM_WORLD, &status);
         }
     }
+}
+//@}
+
+/// \name config updates for MPI
+//@{
+///Update config option for particle types present
+void MPIUpdateUseParticleTypes(Options &opt)
+{
+    MPI_Bcast(&(opt.iusestarparticles),sizeof(opt.iusestarparticles),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.iusesinkparticles),sizeof(opt.iusesinkparticles),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.iusewindparticles),sizeof(opt.iusewindparticles),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.iusetracerparticles),sizeof(opt.iusetracerparticles),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.iuseextradarkparticles),sizeof(opt.iuseextradarkparticles),MPI_BYTE,0,MPI_COMM_WORLD);
 }
 //@}
 
