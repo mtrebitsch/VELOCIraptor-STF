@@ -563,11 +563,11 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     PrintCosmology(opt);
 
     //adjust length scale so that convert from 0 to 1 (box units) to kpc comoving
-    //to scale mpi domains correctly need to store in opt.L the box size in comoving little h value
-    //opt.L= opt.p*opt.h/opt.a;
-    opt.L = header[ifirstfile].BoxSize;
+    //to scale mpi domains correctly need to store in opt.lengthinputconversion the box size in comoving little h value
+    //opt.lengthinputconversion= opt.p*opt.h/opt.a;
+    opt.lengthinputconversion = header[ifirstfile].BoxSize;
     //adjust velocity scale to that ramses is converted to km/s from which you can convert again;
-    opt.V = header[ifirstfile].scale_l/header[ifirstfile].scale_t*1e-5;
+    opt.velocityinputconversion = header[ifirstfile].scale_l/header[ifirstfile].scale_t*1e-5;
 
     //convert mass from code units to Solar Masses
     mscale   = header[ifirstfile].scale_d * (header[ifirstfile].scale_l * header[ifirstfile].scale_l * header[ifirstfile].scale_l) / 1.988e+33;
@@ -1635,9 +1635,9 @@ void ReadRamses(Options &opt, vector<Particle> &Part, const Int_t nbodies, Parti
     MPI_Bcast(&(opt.virlevel),sizeof(opt.virlevel),MPI_BYTE,0,MPI_COMM_WORLD);
     MPI_Bcast(&(opt.virBN98),sizeof(opt.virBN98),MPI_BYTE,0,MPI_COMM_WORLD);
     MPI_Bcast(&(opt.ellxscale),sizeof(opt.ellxscale),MPI_BYTE,0,MPI_COMM_WORLD);
-    MPI_Bcast(&(opt.L),sizeof(opt.L),MPI_BYTE,0,MPI_COMM_WORLD);
-    MPI_Bcast(&(opt.V),sizeof(opt.V),MPI_BYTE,0,MPI_COMM_WORLD);
-    MPI_Bcast(&(opt.M),sizeof(opt.M),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.lengthinputconversion),sizeof(opt.lengthinputconversion),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.velocityinputconversion),sizeof(opt.velocityinputconversion),MPI_BYTE,0,MPI_COMM_WORLD);
+    MPI_Bcast(&(opt.massinputconversion),sizeof(opt.massinputconversion),MPI_BYTE,0,MPI_COMM_WORLD);
     MPI_Bcast(&(opt.G),sizeof(opt.G),MPI_BYTE,0,MPI_COMM_WORLD);
 #ifdef NOMASS
     MPI_Bcast(&(opt.MassValue),sizeof(opt.MassValue),MPI_BYTE,0,MPI_COMM_WORLD);
